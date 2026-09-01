@@ -26,20 +26,27 @@ hanya tahu registry (`@opensellvy/connector`). Satu gate, tanpa hardcode per-pla
 
 ---
 
-## 1b. Build Order (vertical slice)
+## 1b. Build Order — DOMAIN-FIRST (hexagonal: domain di tengah, platform adapter di edge)
 
-`[x]` DECIDED: walking skeleton dulu, lalu Shopee full, baru refactor core/module ikut realita payload.
+`[x]` DECIDED: bangun DOMAIN OMS penuh dulu (bebas platform), platform jadi adapter external.
+Kita resolve satu gate (registry) bukan hardcode per-platform — API platform kapanpun berubah,
+cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan one-gate tanpa platform.
 
-1. `[~]` Walking skeleton: config, logger, errors, http client, crypto, connector contract + registry
+1. `[~]` Walking skeleton (primitif core)
    `[x]` core/config (env loader, namespace resolution)
    `[x]` core/http (fetch client, retry, request hooks utk signing)
    `[x]` core/crypto (HMAC-SHA256, AES-256-GCM token encryption)
    `[x]` core/logger (console logger, zero-dep)
    `[x]` core/event (in-process event bus)
-   `[ ]` db connection helper — DEFERRED (ORM decision open; db mengikuti proven unified model)
-2. `[ ]` **Shopee vertical lengkap**: OAuth, HMAC sign, order/product/inventory pull+push, webhook, mappers
-3. `[ ]` Refactor core/db/module agar FIT unified model hasil mapper Shopee
-4. `[ ]` Replikasi pattern ke TTS/Tokopedia → Lazada → Blibli
+   `[ ]` db connection helper — DEFERRED (ORM decision open)
+2. `[ ]` **Domain contract penuh**: types order/product/inventory/customer/fulfillment/... —
+   dari domain OMS, bukan tebakan platform. Batasi ke kebutuhan OMS (jangan over-model).
+3. `[ ]` **Implementasi module penuh** berdasarkan domain types (tanpa dependency platform) —
+   module jadi reusable, dipanggil semua platform.
+4. `[ ]` **Adapter `local` store** → buktikan one-gate end-to-end tanpa platform.
+5. `[ ]` **Adapt schema DB ke domain** (bukan ke payload platform).
+6. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
+7. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
 
 ---
 
@@ -168,7 +175,7 @@ ke registry. Module & API tak pernah import platform-* langsung.
 |6| API structure | GraphQL main + REST webhooks (recommended) | Open |
 |7| Monitoring | Sentry / OpenTelemetry / later | Open |
 |8| Auth provider | Self-hosted JWT / Supabase / Auth.js | Open |
-|9| Build order | Walking skeleton → Shopee vertical → refactor core/module → replikasi platform lain | **DECIDED** (vertical slice) |
+|9| Build order | **DOMAIN-first (decided)**: domain contract → module penuh → adapter local → schema DB → adapter platform. Platform = external adapter di edge | **DECIDED** (revisi dari vertical-shopee-first) |
 |10| Auth vs OAuth concern | Auth = user OMS (seller/admin/RBAC, `core/auth`), OAuth = platform connector (`connector/oauth`). DB dipisah: `users`+`store_members` vs `platform_accounts`+`platform_tokens` | **DECIDED** |
 
 ---

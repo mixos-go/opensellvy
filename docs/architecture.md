@@ -23,14 +23,18 @@ Rule:
 - `store_members(store_id, user_id, role)` = multi-store + role PER STORE (owner/admin/manager/operator/viewer).
 - Session context (`UserContext`) berisi `storeId` hasıl resolve login, bukan kolom `users`.
 
-## Single gate (plugin)
+## Single gate (plugin, hexagonal/port-adapter)
 
 Module & API hanya tahu `@opensellvy/connector` registry — tidak pernah import `@opensellvy/platform-*`.
-Tambah platform = register plugin; payload platform di-normalisasi oleh connector ke Unified types.
+Tambah platform = register plugin; payload platform di-normalisasi oleh connector ke Unified types
+(domain kita sendiri). API platform kapanpun berubah → cukup update adapter ybs, internal OMS aman.
 
 ```
 request → module → registry.get(platform) → plugin.gateway → Unified types
 ```
+
+Domain model TIDAK menyesuaikan diri ke tiap platform; field yang platform tidak sediakan
+di-omit/null oleh adapter.
 
 ## Dependency direction (wajib)
 
@@ -38,12 +42,16 @@ request → module → registry.get(platform) → plugin.gateway → Unified typ
 types ← core ← connector ← module ← api ← opensellvy (umbrella)
        ← db
        ← platform-* (implements connector contract)
+       ← platform-local (adapter bukti one-gate, tanpa HTTP)
 ```
 core/module TIDAK men-depend platform-*.
 
-## Build order (vertical slice)
+## Build order (domain-first)
 
 1. Walking skeleton (primitif core) — mostly done
-2. Shopee vertical penuh (OAuth, sign, pull/push, webhook, mappers)
-3. Refactor core/db/module agar FIT unified model hasil mapper Shopee
-4. Replikasi pattern ke TTS/Tokopedia → Lazada → Blibli
+2. Domain contract penuh (order, product, inventory, customer, fulfillment, ...) — dari domain OMS
+3. Implementasi module penuh berdasarkan domain types (tanpa dependency platform) — reusable semua platform
+4. Adapter `local` store → buktikan one-gate end-to-end
+5. Adapt schema DB ke domain
+6. Shopee adapter (study docs, clean-room: OAuth, sign, pull/push, webhook, mapper)
+7. Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli

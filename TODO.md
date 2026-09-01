@@ -169,6 +169,7 @@ ke registry. Module & API tak pernah import platform-* langsung.
 |7| Monitoring | Sentry / OpenTelemetry / later | Open |
 |8| Auth provider | Self-hosted JWT / Supabase / Auth.js | Open |
 |9| Build order | Walking skeleton → Shopee vertical → refactor core/module → replikasi platform lain | **DECIDED** (vertical slice) |
+|10| Auth vs OAuth concern | Auth = user OMS (seller/admin/RBAC, `core/auth`), OAuth = platform connector (`connector/oauth`). DB dipisah: `users`+`store_members` vs `platform_accounts`+`platform_tokens` | **DECIDED** |
 
 ---
 

@@ -21,14 +21,26 @@ export interface PlatformAccountRow extends TenantTable {
   authState: 'connected' | 'expired' | 'revoked';
   scopes: string[];
   marketplace: string;
+  connectedBy?: ID;
 }
 
-export interface UserRow extends TenantTable {
+export interface UserRow {
+  id: ID;
   email: string;
   name: string;
   passwordHash: string;
+  status: 'active' | 'suspended';
+  createdAt: ISO8601;
+  updatedAt: ISO8601;
+}
+
+export interface StoreMemberRow {
   storeId: ID;
+  userId: ID;
   role: string;
+  status: 'active' | 'invited' | 'disabled';
+  createdAt: ISO8601;
+  updatedAt: ISO8601;
 }
 
 export interface OrderRow extends TenantTable {

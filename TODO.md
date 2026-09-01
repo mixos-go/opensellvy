@@ -43,8 +43,16 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
    payment/return/warehouse/finance/promotion/notification/analytics/user/store/channel/audit —
    di `@opensellvy/types` (dari domain OMS, bukan tebakan platform; `'local'` masuk PlatformCode utk adapter lokal).
    Plugin gateway (connector) sudah kembali DOMAIN types (bukan payload/unknown), satu-gate resolve.
-3. `[ ]` **Implementasi module penuh** berdasarkan domain types (tanpa dependency platform) —
+3. `[x]` **Implementasi module penuh** berdasarkan domain types (tanpa dependency platform) —
    module jadi reusable, dipanggil semua platform.
+   `impl/` = 18 module service: order/product/inventory/channel (satu gate via registry, sync
+   idempoten by platformOrderId), customer, store, fulfillment, return, payment, warehouse,
+   shipping (port courier), promotion, finance/settlement, notification, user, analytics, audit.
+   `ports/repositories.ts` = storage contracts (domain-pure, DB-agnostic); default adapter
+   `impl/memory` (in-memory) supaya berjalan tanpa DB — diganti Postgres di step 5.
+   Entry: `createServices(deps)` → `Services`. Umbrella `OpenSellvy` wiring `@opensellvy/module` +
+   registry. Tests: order gate e2e (connect→sync→status), inventory adjust/oversell guard,
+   push product (5 passed). typecheck all green.
 4. `[ ]` **Adapter `local` store** → buktikan one-gate end-to-end tanpa platform.
 5. `[ ]` **Adapt schema DB ke domain** (bukan ke payload platform).
 6. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)

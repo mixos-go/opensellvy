@@ -5,7 +5,7 @@ import type {
   ProductStockSku,
   ReturnRequest,
 } from '@opensellvy/types';
-import type { ConnectorContext } from './connector.types';
+import type { ConnectorContext, OAuthToken } from './connector.types';
 
 export type Capability =
   | 'order.pull'
@@ -21,8 +21,14 @@ export type Capability =
 
 export interface PlatformAuth {
   getAuthorizeUrl(): Promise<string>;
-  exchangeCode(code: string): Promise<unknown>;
+  exchangeCode(code: string): Promise<OAuthToken>;
   refreshToken(): Promise<void>;
+}
+
+export interface PlatformShopProfile {
+  platformShopId: string;
+  shopName: string;
+  marketplace: string;
 }
 
 /**
@@ -30,12 +36,14 @@ export interface PlatformAuth {
  * Seluruh method berbicara dalam DOMAIN types kita, bukan payload platform.
  */
 export interface PlatformGateway {
+  getShop(context: ConnectorContext): Promise<PlatformShopProfile>;
   pullOrders(context: ConnectorContext, opts?: { since?: Date }): Promise<UnifiedOrder[]>;
   getOrder(context: ConnectorContext, platformOrderId: string): Promise<UnifiedOrder>;
   pushOrder(context: ConnectorContext, order: UnifiedOrder): Promise<void>;
   updateOrder(context: ConnectorContext, orderId: string, patch: UnknownOrderPatch): Promise<void>;
   pullProducts(context: ConnectorContext): Promise<UnifiedProduct[]>;
   pushProduct(context: ConnectorContext, product: UnifiedProduct): Promise<void>;
+  pushProducts(context: ConnectorContext, products: UnifiedProduct[]): Promise<void>;
   syncInventory(context: ConnectorContext, items: ProductStockSku[]): Promise<void>;
   manageReturn(context: ConnectorContext, request: ReturnRequest, action: ReturnAction): Promise<void>;
 }

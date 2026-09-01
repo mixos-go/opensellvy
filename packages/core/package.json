@@ -1,0 +1,29 @@
+{
+  "name": "@opensellvy/core",
+  "version": "0.0.1",
+  "description": "Core: auth, RBAC, crypto, logger, event, cache, queue",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./auth": {
+      "import": "./dist/auth/index.js",
+      "types": "./dist/auth/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opensellvy/types": "workspace:*"
+  },
+  "license": "MIT"
+}

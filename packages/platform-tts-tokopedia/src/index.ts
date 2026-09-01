@@ -1,0 +1,1 @@
+export { tokopediaPlugin, registerTokopedia } from './tokopedia.connector';

@@ -1,0 +1,1 @@
+export { blibliPlugin, registerBlibli } from './blibli.connector';

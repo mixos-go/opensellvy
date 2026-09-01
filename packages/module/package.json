@@ -1,0 +1,34 @@
+{
+  "name": "@opensellvy/module",
+  "version": "0.0.1",
+  "description": "18 domain modules - single business gate",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./order": {
+      "import": "./dist/order/index.js",
+      "types": "./dist/order/index.d.ts"
+    },
+    "./product": {
+      "import": "./dist/product/index.js",
+      "types": "./dist/product/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opensellvy/types": "workspace:*",
+    "@opensellvy/connector": "workspace:*"
+  },
+  "license": "MIT"
+}

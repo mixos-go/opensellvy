@@ -1,65 +1,64 @@
-# opensellvy
+# OpenSellvy
 
-Omnichannel OMS SDK untuk platform ecommerce Indonesia (Shopee, TikTok Shop/Tokopedia, Lazada, Blibli).
+Omnichannel OMS platform untuk ecommerce Indonesia (Shopee, TikTok Shop/Tokopedia, Lazada, Blibli) — monorepo berbasis plugin.
 
-## Installation
+## Architecture
 
-```bash
-npm install opensellvy
 ```
+packages/
+  types/               @opensellvy/types        shared types
+  core/                @opensellvy/core         auth, RBAC, crypto, logger, event, cache, queue
+  db/                  @opensellvy/db           PostgreSQL schema + migrations
+  connector/           @opensellvy/connector    platform plugin CONTRACT + registry (single gate)
+  module/              @opensellvy/module       18 domain modules (business logic)
+  api/                 @opensellvy/api          GraphQL + REST (webhook/oauth)
+  ui/                  @opensellvy/ui           React components
+  opensellvy/          opensellvy               umbrella SDK entry
+  platform-shopee/     @opensellvy/platform-shopee           plugin
+  platform-tts-tokopedia/ @opensellvy/platform-tts-tokopedia plugin
+  platform-lazada/     @opensellvy/platform-lazada           plugin
+  platform-blibli/     @opensellvy/platform-blibli           plugin
+```
+
+## Key principle: single gate
+
+Semua platform (payload berbeda-beda) melewati **satu gate** module layer. Module tidak pernah
+`import` connector spesifik platform — hanya lewat `@opensellvy/connector` registry (polymorphism,
+tanpa hardcode per-platform). Tambah platform baru = daftarkan plugin, module/API otomatis dapat.
+
+```
+request → module → registry.get(platform) → plugin.gateway → Unified types
+```
+
+Dependency rule (tidak boleh dilanggar): core/module TIDAK import `@opensellvy/platform-*`.
 
 ## Usage
 
-### SDK Mode
-
 ```typescript
-import { OpenSellvy, configure } from 'opensellvy';
+import { OpenSellvy } from 'opensellvy';
+import { registerShopee } from '@opensellvy/platform-shopee';
+import { registerTokopedia } from '@opensellvy/platform-tts-tokopedia';
+
+registerShopee();
+registerTokopedia();
 
 const oms = new OpenSellvy({ apiKey: '...' });
-const orders = await oms.orders.list({ storeId: 'store_123' });
+const orders = await oms.modules.order.list({ storeId: 'store_123' });
 ```
 
-### API Mode
+## Development
 
-```typescript
-import { createServer } from 'opensellvy/api';
-
-const server = createServer({ port: 4000 });
-await server.start();
+```bash
+pnpm install
+pnpm build
+pnpm test
+pnpm typecheck
 ```
-
-### Connector Mode
-
-```typescript
-import { registerPlatform } from 'opensellvy/connectors';
-import { ShopeeConnector } from 'opensellvy/connectors';
-
-registerPlatform('shopee', ShopeeConnector);
-```
-
-## Structure
-
-- `src/core` - Auth, RBAC, crypto, logger, event, cache, queue
-- `src/db` - Database schema & SQL migrations (PostgreSQL via Drizzle)
-- `src/connector` - Platform connectors (Shopee, TTS/Tokopedia, Lazada, Blibli) + OAuth
-- `src/module` - 18 business domain modules
-- `src/api` - GraphQL (main API) + REST (webhooks/oauth callbacks)
-- `src/ui` - Optional React components
-
-## Supported Platforms
-
-| Platform | Status |
-|---|---|
-| Shopee | Planned |
-| TikTok Shop / Tokopedia | Planned |
-| Lazada | Planned |
-| Blibli | Planned |
 
 ## Disclaimer
 
-`opensellvy` dibangun dari documentation API resmi masing-masing platform dan tidak
-mempublikasikan atau mendistribusikan SDK resmi milik platform. Seluruh kode connector
-adalah implementasi mandiri (clean-room) berbasis HTTP.
+Semua connector dibangun dari dokumentasi API resmi (clean-room HTTP implementation). Tidak
+mendistribusikan SDK official milik platform.
 
 ## License
 

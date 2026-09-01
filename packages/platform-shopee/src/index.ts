@@ -1,0 +1,1 @@
+export { shopeePlugin, registerShopee } from './shopee.connector';

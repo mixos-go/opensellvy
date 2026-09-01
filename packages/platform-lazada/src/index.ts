@@ -1,0 +1,1 @@
+export { lazadaPlugin, registerLazada } from './lazada.connector';

@@ -13,13 +13,27 @@
 
 ## 1. Foundation
 
-`[x]` Repo scaffolding (directory tree, package.json, tsconfig, tsup, vitest, .env.example)
+`[x]` Scaffolding monorepo (pnpm workspaces, packages/)
+
+`[x]` Sokongan architecture decision: **plugin monorepo** — connector = plugin external, core/module
+hanya tahu registry (`@opensellvy/connector`). Satu gate, tanpa hardcode per-platform.
 
 `[ ]` Decide core stack: DB ORM (Drizzle vs Prisma), HTTP server (Hono vs Fastify vs Express), API (GraphQL Yoga vs Apollo)
 
 `[ ]` Decide API design: GraphQL-first vs REST-first vs hybrid (GraphQL main + REST webhooks)
 
 `[ ]` Build & publish pipeline (tsup, npm publishing, CI)
+
+---
+
+## 1b. Build Order (vertical slice)
+
+`[x]` DECIDED: walking skeleton dulu, lalu Shopee full, baru refactor core/module ikut realita payload.
+
+1. `[x]` Walking skeleton: config, logger, errors, http client, crypto, connector contract + registry
+2. `[ ]` **Shopee vertical lengkap**: OAuth, HMAC sign, order/product/inventory pull+push, webhook, mappers
+3. `[ ]` Refactor core/db/module agar FIT unified model hasil mapper Shopee
+4. `[ ]` Replikasi pattern ke TTS/Tokopedia → Lazada → Blibli
 
 ---
 
@@ -44,10 +58,12 @@
 
 ---
 
-## 4. Connectors (Platform API)
+## 4. Connectors (Plugin Architecture)
 
-`[!]` **DECISION NEEDED: Build from HTTP docs (clean-room) vs official SDK vs community SDK.**
-Rekomendasi: clean-room HTTP implementation dari dokumentasi resmi (no legal risk, publish-safe).
+`[x]` DECISION: **Clean-room HTTP (build dari dokumentasi resmi)** — no official SDK, publish-safe.
+`[x]` DECISION: **Plugin monorepo** — tiap platform = package `@opensellvy/platform-*`, didaftarkan
+ke registry. Module & API tak pernah import platform-* langsung.
+`[x]` Connector contract (`PlatformPlugin`: capabilities, auth, gateway, webhook) + registry
 
 ### 4.1 Shopee
 `[ ]` Study API docs (Open Platform)
@@ -138,13 +154,15 @@ Rekomendasi: clean-room HTTP implementation dari dokumentasi resmi (no legal ris
 
 |#| Topic | Options | Status |
 |---|---|---|---|
-|1| Platform API strategy | Official SDK / Community SDK / Clean-room HTTP (recommended) | **NEED DECISION** — risk: official SDK (TTS/Tokopedia, Lazada) punya license restriction utk redistribution |
-|2| ORM | Drizzle (recommended) / Prisma / Kysely | Open |
-|3| HTTP server | Hono (recommended) / Fastify / Express | Open |
-|4| GraphQL engine | Yoga (recommended) / Apollo | Open |
-|5| API structure | GraphQL main + REST webhooks (recommended) | Open |
-|6| Sentry/monitoring | Later | Open |
-|7| Auth provider | Self-hosted JWT / Supabase / Auth.js | Open |
+|1| Platform API strategy | Official SDK / Community SDK / **Clean-room HTTP (decided)** | **DECIDED** |
+|2| Plugin packaging | **Monorepo packages/ (decided)** — `@opensellvy/platform-*` per connector | **DECIDED** |
+|3| ORM | Drizzle (recommended) / Prisma / Kysely | Open |
+|4| HTTP server | Hono (recommended) / Fastify / Express | Open |
+|5| GraphQL engine | Yoga (recommended) / Apollo | Open |
+|6| API structure | GraphQL main + REST webhooks (recommended) | Open |
+|7| Monitoring | Sentry / OpenTelemetry / later | Open |
+|8| Auth provider | Self-hosted JWT / Supabase / Auth.js | Open |
+|9| Build order | Walking skeleton → Shopee vertical → refactor core/module → replikasi platform lain | **DECIDED** (vertical slice) |
 
 ---
 

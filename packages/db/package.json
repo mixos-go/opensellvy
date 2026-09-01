@@ -1,0 +1,27 @@
+{
+  "name": "@opensellvy/db",
+  "version": "0.0.1",
+  "description": "Database schema & migrations (PostgreSQL)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "migrations"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed.ts"
+  },
+  "dependencies": {
+    "@opensellvy/types": "workspace:*"
+  },
+  "license": "MIT"
+}

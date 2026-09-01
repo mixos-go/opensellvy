@@ -30,7 +30,13 @@ hanya tahu registry (`@opensellvy/connector`). Satu gate, tanpa hardcode per-pla
 
 `[x]` DECIDED: walking skeleton dulu, lalu Shopee full, baru refactor core/module ikut realita payload.
 
-1. `[x]` Walking skeleton: config, logger, errors, http client, crypto, connector contract + registry
+1. `[~]` Walking skeleton: config, logger, errors, http client, crypto, connector contract + registry
+   `[x]` core/config (env loader, namespace resolution)
+   `[x]` core/http (fetch client, retry, request hooks utk signing)
+   `[x]` core/crypto (HMAC-SHA256, AES-256-GCM token encryption)
+   `[x]` core/logger (console logger, zero-dep)
+   `[x]` core/event (in-process event bus)
+   `[ ]` db connection helper — DEFERRED (ORM decision open; db mengikuti proven unified model)
 2. `[ ]` **Shopee vertical lengkap**: OAuth, HMAC sign, order/product/inventory pull+push, webhook, mappers
 3. `[ ]` Refactor core/db/module agar FIT unified model hasil mapper Shopee
 4. `[ ]` Replikasi pattern ke TTS/Tokopedia → Lazada → Blibli

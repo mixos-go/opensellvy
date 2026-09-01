@@ -6,6 +6,7 @@ const BASE_URL = 'https://api.blibli.com';
 export const blibliPlugin: PlatformPlugin = {
   platform: 'blibli',
   name: 'Blibli',
+  baseUrl: BASE_URL,
   capabilities: [
     'order.pull',
     'order.push',
@@ -14,6 +15,7 @@ export const blibliPlugin: PlatformPlugin = {
     'product.pull',
     'product.push',
     'inventory.sync',
+    'return.manage',
     'webhook.receive',
   ],
   auth: {
@@ -23,16 +25,18 @@ export const blibliPlugin: PlatformPlugin = {
   },
   gateway: {
     pullOrders: () => Promise.resolve([]),
+    getOrder: () => Promise.reject(new Error('not implemented')),
     pushOrder: () => Promise.resolve(),
+    updateOrder: () => Promise.resolve(),
     pullProducts: () => Promise.resolve([]),
     pushProduct: () => Promise.resolve(),
     syncInventory: () => Promise.resolve(),
+    manageReturn: () => Promise.resolve(),
   },
   webhook: {
     verify: () => Promise.resolve(false),
-    map: () => Promise.resolve({}),
+    map: () => Promise.resolve({ type: 'unknown', data: {} }),
   },
-  baseUrl: BASE_URL,
 };
 
 export function registerBlibli(): void {

@@ -39,8 +39,10 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
    `[x]` core/logger (console logger, zero-dep)
    `[x]` core/event (in-process event bus)
    `[ ]` db connection helper — DEFERRED (ORM decision open)
-2. `[ ]` **Domain contract penuh**: types order/product/inventory/customer/fulfillment/... —
-   dari domain OMS, bukan tebakan platform. Batasi ke kebutuhan OMS (jangan over-model).
+2. `[x]` **Domain contract penuh**: types order/product/inventory/customer/fulfillment/shipping/
+   payment/return/warehouse/finance/promotion/notification/analytics/user/store/channel/audit —
+   di `@opensellvy/types` (dari domain OMS, bukan tebakan platform; `'local'` masuk PlatformCode utk adapter lokal).
+   Plugin gateway (connector) sudah kembali DOMAIN types (bukan payload/unknown), satu-gate resolve.
 3. `[ ]` **Implementasi module penuh** berdasarkan domain types (tanpa dependency platform) —
    module jadi reusable, dipanggil semua platform.
 4. `[ ]` **Adapter `local` store** → buktikan one-gate end-to-end tanpa platform.

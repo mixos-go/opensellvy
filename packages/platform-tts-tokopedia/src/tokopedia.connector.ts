@@ -6,6 +6,7 @@ const BASE_URL = 'https://fs.tokopedia.net';
 export const tokopediaPlugin: PlatformPlugin = {
   platform: 'tts-tokopedia',
   name: 'TikTok Shop / Tokopedia',
+  baseUrl: BASE_URL,
   capabilities: [
     'order.pull',
     'order.push',
@@ -14,6 +15,7 @@ export const tokopediaPlugin: PlatformPlugin = {
     'product.pull',
     'product.push',
     'inventory.sync',
+    'return.manage',
     'webhook.receive',
   ],
   auth: {
@@ -23,16 +25,18 @@ export const tokopediaPlugin: PlatformPlugin = {
   },
   gateway: {
     pullOrders: () => Promise.resolve([]),
+    getOrder: () => Promise.reject(new Error('not implemented')),
     pushOrder: () => Promise.resolve(),
+    updateOrder: () => Promise.resolve(),
     pullProducts: () => Promise.resolve([]),
     pushProduct: () => Promise.resolve(),
     syncInventory: () => Promise.resolve(),
+    manageReturn: () => Promise.resolve(),
   },
   webhook: {
     verify: () => Promise.resolve(false),
-    map: () => Promise.resolve({}),
+    map: () => Promise.resolve({ type: 'unknown', data: {} }),
   },
-  baseUrl: BASE_URL,
 };
 
 export function registerTokopedia(): void {

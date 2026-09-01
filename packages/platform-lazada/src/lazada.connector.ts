@@ -6,6 +6,7 @@ const BASE_URL = 'https://api.lazada.com.my';
 export const lazadaPlugin: PlatformPlugin = {
   platform: 'lazada',
   name: 'Lazada',
+  baseUrl: BASE_URL,
   capabilities: [
     'order.pull',
     'order.push',
@@ -14,6 +15,7 @@ export const lazadaPlugin: PlatformPlugin = {
     'product.pull',
     'product.push',
     'inventory.sync',
+    'return.manage',
     'webhook.receive',
   ],
   auth: {
@@ -23,16 +25,18 @@ export const lazadaPlugin: PlatformPlugin = {
   },
   gateway: {
     pullOrders: () => Promise.resolve([]),
+    getOrder: () => Promise.reject(new Error('not implemented')),
     pushOrder: () => Promise.resolve(),
+    updateOrder: () => Promise.resolve(),
     pullProducts: () => Promise.resolve([]),
     pushProduct: () => Promise.resolve(),
     syncInventory: () => Promise.resolve(),
+    manageReturn: () => Promise.resolve(),
   },
   webhook: {
     verify: () => Promise.resolve(false),
-    map: () => Promise.resolve({}),
+    map: () => Promise.resolve({ type: 'unknown', data: {} }),
   },
-  baseUrl: BASE_URL,
 };
 
 export function registerLazada(): void {

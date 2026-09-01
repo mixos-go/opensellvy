@@ -1,4 +1,10 @@
-import type { PlatformCode } from '@opensellvy/types';
+import type {
+  PlatformCode,
+  UnifiedOrder,
+  UnifiedProduct,
+  ProductStockSku,
+  ReturnRequest,
+} from '@opensellvy/types';
 import type { ConnectorContext } from './connector.types';
 
 export type Capability =
@@ -10,6 +16,7 @@ export type Capability =
   | 'product.push'
   | 'inventory.sync'
   | 'promotion.sync'
+  | 'return.manage'
   | 'webhook.receive';
 
 export interface PlatformAuth {
@@ -18,17 +25,33 @@ export interface PlatformAuth {
   refreshToken(): Promise<void>;
 }
 
+/**
+ * Gateway — contract yang diimplementasikan setiap adapter platform.
+ * Seluruh method berbicara dalam DOMAIN types kita, bukan payload platform.
+ */
 export interface PlatformGateway {
-  pullOrders(context: ConnectorContext, opts?: { since?: Date }): Promise<unknown[]>;
-  pushOrder(context: ConnectorContext, order: unknown): Promise<void>;
-  pullProducts(context: ConnectorContext): Promise<unknown[]>;
-  pushProduct(context: ConnectorContext, product: unknown): Promise<void>;
-  syncInventory(context: ConnectorContext, items: unknown[]): Promise<void>;
+  pullOrders(context: ConnectorContext, opts?: { since?: Date }): Promise<UnifiedOrder[]>;
+  getOrder(context: ConnectorContext, platformOrderId: string): Promise<UnifiedOrder>;
+  pushOrder(context: ConnectorContext, order: UnifiedOrder): Promise<void>;
+  updateOrder(context: ConnectorContext, orderId: string, patch: UnknownOrderPatch): Promise<void>;
+  pullProducts(context: ConnectorContext): Promise<UnifiedProduct[]>;
+  pushProduct(context: ConnectorContext, product: UnifiedProduct): Promise<void>;
+  syncInventory(context: ConnectorContext, items: ProductStockSku[]): Promise<void>;
+  manageReturn(context: ConnectorContext, request: ReturnRequest, action: ReturnAction): Promise<void>;
 }
+
+export interface UnknownOrderPatch {
+  status?: string;
+  trackingNumber?: string;
+  courier?: string;
+  [key: string]: unknown;
+}
+
+export type ReturnAction = 'approve' | 'reject' | 'receive' | 'refund';
 
 export interface PlatformWebhookHandler {
   verify(payload: unknown, signature: string): Promise<boolean>;
-  map(event: string, payload: unknown): Promise<unknown>;
+  map(event: string, payload: unknown): Promise<{ type: string; data: unknown }>;
 }
 
 export interface PlatformPlugin {

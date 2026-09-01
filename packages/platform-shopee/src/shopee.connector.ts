@@ -6,6 +6,7 @@ const BASE_URL = 'https://partner.shopeemobile.com';
 export const shopeePlugin: PlatformPlugin = {
   platform: 'shopee',
   name: 'Shopee',
+  baseUrl: BASE_URL,
   capabilities: [
     'order.pull',
     'order.push',
@@ -14,6 +15,7 @@ export const shopeePlugin: PlatformPlugin = {
     'product.pull',
     'product.push',
     'inventory.sync',
+    'return.manage',
     'webhook.receive',
   ],
   auth: {
@@ -23,16 +25,18 @@ export const shopeePlugin: PlatformPlugin = {
   },
   gateway: {
     pullOrders: () => Promise.resolve([]),
+    getOrder: () => Promise.reject(new Error('not implemented')),
     pushOrder: () => Promise.resolve(),
+    updateOrder: () => Promise.resolve(),
     pullProducts: () => Promise.resolve([]),
     pushProduct: () => Promise.resolve(),
     syncInventory: () => Promise.resolve(),
+    manageReturn: () => Promise.resolve(),
   },
   webhook: {
     verify: () => Promise.resolve(false),
-    map: () => Promise.resolve({}),
+    map: () => Promise.resolve({ type: 'unknown', data: {} }),
   },
-  baseUrl: BASE_URL,
 };
 
 export function registerShopee(): void {

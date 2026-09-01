@@ -18,14 +18,17 @@ const dummy: PlatformPlugin = {
   },
   gateway: {
     pullOrders: () => Promise.resolve([]),
+    getOrder: () => Promise.reject(new Error('not implemented')),
     pushOrder: () => Promise.resolve(),
+    updateOrder: () => Promise.resolve(),
     pullProducts: () => Promise.resolve([]),
     pushProduct: () => Promise.resolve(),
     syncInventory: () => Promise.resolve(),
+    manageReturn: () => Promise.resolve(),
   },
   webhook: {
     verify: () => Promise.resolve(false),
-    map: () => Promise.resolve({}),
+    map: () => Promise.resolve({ type: 'unknown', data: {} }),
   },
 };
 

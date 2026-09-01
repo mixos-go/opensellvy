@@ -1,0 +1,1 @@
+export type { PromotionType, PromotionModule } from './promotion.service';

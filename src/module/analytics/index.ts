@@ -1,0 +1,1 @@
+export type { AnalyticsModule } from './analytics.service';

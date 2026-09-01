@@ -1,0 +1,1 @@
+export type { PaymentModule } from './payment.service';

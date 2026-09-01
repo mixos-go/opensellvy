@@ -53,7 +53,12 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
    Entry: `createServices(deps)` → `Services`. Umbrella `OpenSellvy` wiring `@opensellvy/module` +
    registry. Tests: order gate e2e (connect→sync→status), inventory adjust/oversell guard,
    push product (5 passed). typecheck all green.
-4. `[ ]` **Adapter `local` store** → buktikan one-gate end-to-end tanpa platform.
+4. `[x]` **Adapter `local` store** → buktikan one-gate end-to-end tanpa platform.
+   `@opensellvy/platform-local` (marketed store in-memory, multi-tenant by storeId):
+   OAuth connect → sync order (idempoten) → fulfill (status push-back DUA ARAH via
+   gateway.updateOrder) → product push → inventory sync → stok terlihat platform.
+   Buat SDK tidak berbeda dengan adapter nyata — order/webhook/token sama.
+   Demo: `pnpm demo:local` (examples/local-gate.mts) — module OMS tak pernah tahu adapter mana.
 5. `[ ]` **Adapt schema DB ke domain** (bukan ke payload platform).
 6. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
 7. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli

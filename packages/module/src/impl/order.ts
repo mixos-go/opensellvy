@@ -17,6 +17,20 @@ const ACTION_TO_STATUS: Record<OrderStatusUpdate['action'], OrderStatus> = {
   return: 'returned',
 };
 
+function orderChanged(a: UnifiedOrder, b: UnifiedOrder): boolean {
+  const pick = (o: UnifiedOrder) =>
+    JSON.stringify({
+      status: o.status,
+      lines: o.lines,
+      totals: o.totals,
+      courier: o.shipping.courier,
+      service: o.shipping.service,
+      trackingNumber: o.shipping.trackingNumber,
+      raw: o.raw,
+    });
+  return pick(a) !== pick(b);
+}
+
 export interface OrderModuleImpl {
   list(filter: OrderFilter): Promise<Paginated<UnifiedOrder>>;
   getById(orderId: string): Promise<UnifiedOrder>;
@@ -79,6 +93,21 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
 
       const updated = await repos.orders.update(orderId, negotiated);
       await deps.events?.emit('order.status.updated', { orderId, from: order.status, to: status });
+
+      // satu gate DUA ARAH: status internal dipropagasi balik ke platform
+      // (adapter translate ke payload platform masing-masing)
+      try {
+        const plugin = registry.get(order.platform);
+        const context = await channelContext(deps, order.storeId, order.platform);
+        await plugin.gateway.updateOrder(context, order.platformOrderId, {
+          status,
+          ...(update.trackingNumber ? { trackingNumber: update.trackingNumber } : {}),
+          ...(update.courier ? { courier: update.courier } : {}),
+        });
+      } catch (err) {
+        deps.logger?.warn('updateOrder push-back gagal (status tetap tersimpan)', err);
+      }
+
       await deps.events?.emit('audit.logged', {
         action: `order.${update.action}`,
         actorId: actorId ?? 'system',
@@ -119,7 +148,7 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
             normalized.createdAt = normalized.createdAt ?? now();
             await repos.orders.save(normalized);
             created += 1;
-          } else {
+          } else if (orderChanged(existing, normalized)) {
             await repos.orders.merge({
               ...existing,
               ...normalized,

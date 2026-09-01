@@ -8,9 +8,15 @@ importers:
 
   .:
     devDependencies:
+      '@opensellvy/platform-local':
+        specifier: workspace:*
+        version: link:packages/platform-local
       '@types/node':
         specifier: '22'
         version: 22.20.1
+      opensellvy:
+        specifier: workspace:*
+        version: link:packages/opensellvy
       tsup:
         specifier: ^8.3.0
         version: 8.5.1(postcss@8.5.26)(tsx@4.23.13)(typescript@5.9.3)
@@ -104,6 +110,19 @@ importers:
       '@opensellvy/types':
         specifier: workspace:*
         version: link:../types
+
+  packages/platform-local:
+    dependencies:
+      '@opensellvy/connector':
+        specifier: workspace:*
+        version: link:../connector
+      '@opensellvy/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@opensellvy/module':
+        specifier: workspace:*
+        version: link:../module
 
   packages/platform-shopee:
     dependencies:

@@ -1,0 +1,28 @@
+{
+  "name": "@opensellvy/platform-local",
+  "version": "0.0.1",
+  "description": "Local store adapter - bukti satu-gate (tanpa platform API)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@opensellvy/types": "workspace:*",
+    "@opensellvy/connector": "workspace:*"
+  },
+  "devDependencies": {
+    "@opensellvy/module": "workspace:*"
+  },
+  "license": "MIT"
+}

@@ -11,9 +11,12 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "db:migrate": "pnpm --filter @opensellvy/db db:migrate",
-    "db:seed": "pnpm --filter @opensellvy/db db:seed"
+    "db:seed": "pnpm --filter @opensellvy/db db:seed",
+    "demo:local": "tsx examples/local-gate.mts"
   },
   "devDependencies": {
+    "opensellvy": "workspace:*",
+    "@opensellvy/platform-local": "workspace:*",
     "@types/node": "22",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",

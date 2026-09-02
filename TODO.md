@@ -92,9 +92,14 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
      - API (Hono): auth **fail-closed default** (`authMode:'open'` utk dev eksplisit),
        webhook dispatch via `onWebhook`, route products/inventory/channels + OAuth callback;
        + tests 9.
-     - Tests battle: finance/analytics/returns/fulfillment/promotion/payment/user+audit/
-       shipping/catalog/updateStatus-edges (module 33), connector 10, api 9, platform-local 4,
-       db-pg 2, opensellvy 2, core 19 = **79 test hijau**, typecheck & build 14/14, demo:local jalan.
+- Tests battle: finance/analytics/returns/fulfillment/promotion/payment/user+audit/
+        shipping/catalog/updateStatus-edges (module 33), connector 10, api 9, platform-local 4,
+        db-pg 2, opensellvy 2, core 42 = **102 test hijau**, typecheck & build 14/14, demo:local jalan.
+      - core/auth: JWT HS256 (sign/verify, issuer/audience/maxAge), password scrypt, AuthService
+        login/refresh(rotation)/logout/logoutAll/verifyToken, session store (hash token, revoke),
+        fail-closed & anti-lockout (INVALID_CREDENTIALS tak bocorkan email/password); + tests 13.
+      - core cache/queue: `createMemoryCache` (TTL lazy + sweep + invalidate prefix/glob) &
+        `createMemoryQueue` (delay, retry attempts, remove) — pengganti nyata Redis/BullMQ nanti; + tests 10.
   7. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
  8. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
 
@@ -102,14 +107,15 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
 
 ## 2. Core
 
-- `[ ]` Auth (JWT, session, refresh token)
+- `[x]` Auth (JWT HS256 self-contained: sign/verify + issuer/audience/maxAge; password scrypt; `AuthService` login/refresh-rotation/logout/logoutAll/verifyToken; `RefreshSessionStore` utk revoke; + tests 13)
 - `[x]` RBAC (identity-aware: `can(userId, perm, {storeId})` resolve role via injected `RoleResolver`, fail-closed tanpa resolver; + tests)
 - `[x]` Crypto (AES-256-GCM token encryption, HMAC-SHA256, sha256/randomHex; + tests)
 - `[x]` Logger (console, zero-dep)
 - `[x]` Event bus (in-process; + tests)
 - `[x]` HTTP client (fetch, retry/backoff, hooks, JSON; + tests)
-- `[ ]` Cache (interface only — impl open)
-- `[ ]` Queue (bullmq)
+- `[x]` Cache (`createMemoryCache`: TTL lazy + sweep, `invalidate` prefix/glob; + tests 5; impl Redis nanti)
+- `[x]` Queue (`createMemoryQueue`: delay/retry/remove; + tests 5; prod pakai BullMQ/Redis)
+  - Catatan: stor untuk `RefreshSessionStore` di-binding di lapisan infra (db-pg), bukan di core.
 
 ---
 
@@ -221,7 +227,7 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 `[ ]` Getting started guide
 `[ ]` Per-platform connector docs
 `[ ]` API reference
-`[~]` Unit tests — **79 test hijau** (core 19, connector 10, module 33, platform-local 4, api 9, db-pg 2, opensellvy 2)
+`[~]` Unit tests — **102 test hijau** (core 42, connector 10, module 33, platform-local 4, api 9, db-pg 2, opensellvy 2)
 `[ ]` Integration tests (mock server per platform)
 `[ ]` CI (lint, typecheck, test, build)
 

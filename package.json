@@ -5,7 +5,7 @@
   "description": "Omnichannel OMS platform for Indonesian ecommerce - monorepo",
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm -r --workspace-concurrency=1 --sort build",
     "dev": "pnpm --filter @opensellvy/api dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

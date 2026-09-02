@@ -233,7 +233,9 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 `[ ]` Getting started guide
 `[ ]` Per-platform connector docs
 `[ ]` API reference
-`[~]` Unit tests — **104 test hijau** (core 42, connector 10, module 33, platform-local 4, api 10, db-pg 3, opensellvy 2)
+`[~]` Unit & integration tests — **124 test hijau** (core 50, connector 10, module 33, platform-local 4, api 10, db-pg 15, opensellvy 2)
+  - db-pg battle test: semua repository di Postgres nyata (stores, channels, users, members, warehouses, customers, returns, payments, shipments, settlements, promotions, notifications, audits) + lifecycle + auth e2e. Mengungkap bug: `delete` di products/channels/stores/warehouses tidak dieksekusi (`void` query lazy Drizzle) → difix `await`.
+  - core +23: auth, cache memory, queue memory, **RedisCache (ioredis, integrasi Redis nyata)**, **BullMqQueue (BullMQ, integrasi Redis + retry/backoff)**.
 `[x]` Quality gates: ESLint flat config (typescript-eslint) → `pnpm -r lint` hijau semua paket;
   TS strict penuh (`noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`) → typecheck hijau;
   `pnpm check` = typecheck + lint + build + test satu perintah.
@@ -265,3 +267,12 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 2. TikTok Shop/Tokopedia — volume terbesar TTS + Tokopedia legacy merger
 3. Lazada
 4. Blibli
+## Quality gates & infra adapters (fase hardening)
+- `[x]` ESLint flat config (typescript-eslint) → `pnpm -r lint` hijau semua paket.
+- `[x]` TS strict penuh (`noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`) → typecheck hijau 14/14.
+- `[x]` `pnpm check` = typecheck + lint + build + test satu perintah.
+- `[x]` Root build diserialkan `--workspace-concurrency=1 --sort` (race order build db→db-pg di DTS).
+- `[x]` cache-redis: `createRedisCache`/`RedisCache` (ioredis; set/get/del/invalidate SCAN+DEL/TTL) di core.
+- `[x]` queue-bullmq: `createBullMqQueue`/`BullMqQueue` (BullMQ; add dengan delay/attempts/backoff, process dispatcher satu-worker, remove, close) di core.
+- `[x]` db-pg battle-test semua repo di Postgres nyata (15 test db-pg).
+- `[ ]` Lanjutkan platform adapters (shopee/tokopedia/lazada/blibli) pakai registry + pooling cache/queue di atas core.

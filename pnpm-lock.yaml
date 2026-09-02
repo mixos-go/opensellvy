@@ -53,6 +53,9 @@ importers:
 
   packages/connector:
     dependencies:
+      '@opensellvy/core':
+        specifier: workspace:*
+        version: link:../core
       '@opensellvy/types':
         specifier: workspace:*
         version: link:../types
@@ -75,9 +78,24 @@ importers:
         specifier: ^8.13.1
         version: 8.23.0
     devDependencies:
+      '@opensellvy/connector':
+        specifier: workspace:*
+        version: link:../connector
+      '@opensellvy/db-pg':
+        specifier: workspace:*
+        version: link:../db-pg
+      '@opensellvy/module':
+        specifier: workspace:*
+        version: link:../module
+      '@opensellvy/platform-local':
+        specifier: workspace:*
+        version: link:../platform-local
       '@types/pg':
         specifier: ^8.11.10
         version: 8.23.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
 
   packages/db-pg:
     dependencies:

@@ -1,6 +1,16 @@
 import type { Services, ModuleDeps } from '@opensellvy/module';
 import type { ConnectorRegistry } from '@opensellvy/connector';
 
+export interface WebhookDispatch {
+  (input: {
+    platform: string;
+    event: string;
+    type: string;
+    data: unknown;
+    signature: string;
+  }): Promise<void> | void;
+}
+
 /**
  * ApiContext — komposisi root untuk lapisan API.
  * Tersusun dari Use Case layer (@opensellvy/module services) + registry adapter.
@@ -16,9 +26,12 @@ export interface ApiContext {
   tokens?: ModuleDeps['tokens'];
   /** credential provider (untuk oauth callback flow). */
   credentials?: ModuleDeps['credentials'];
-  /** rahasia utk mem-verifikasi signature webhook + bearer token (jika ada). */
+  /** dispatch webhook terverifikasi → lapisan aplikasi (sync/event). Default: no-op. */
+  onWebhook?: WebhookDispatch;
+  /** keamanan: jwtSecret utk bearer auth; mode auth (closed default = fail-closed). */
   secrets?: {
     jwtSecret?: string;
     webhook?: Partial<Record<string, string>>;
   };
+  authMode?: 'closed' | 'open';
 }

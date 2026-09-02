@@ -9,6 +9,16 @@ import { healthHandler } from './controllers/health.controller';
 import { listStoresHandler, createStoreHandler, getStoreHandler } from './controllers/store.controller';
 import { listOrdersHandler, getOrderHandler, syncOrdersHandler } from './controllers/order.controller';
 import { webhookReceiverHandler } from './controllers/webhook.controller';
+import {
+  listProductsHandler,
+  createProductHandler,
+  getProductHandler,
+  listInventoryHandler,
+  adjustInventoryHandler,
+  listChannelsHandler,
+  authorizeChannelHandler,
+  oauthCallbackHandler,
+} from './controllers/catalog.controller';
 
 /**
  * Router layer — komposisi Hono app dari route + middleware.
@@ -26,7 +36,7 @@ export function buildApp(ctx: ApiContext): Hono<{ Variables: { api: ApiContext; 
   // Public
   app.get('/health', healthHandler);
 
-  // Store — CRUD-lite (auth opsional; fail-open bila jwtSecret kosong)
+  // Store — CRUD-lite (bearer auth, fail-closed kecuali authMode: 'open')
   app.get('/api/stores', bearerAuth, listStoresHandler);
   app.post('/api/stores', bearerAuth, createStoreHandler);
   app.get('/api/stores/:id', bearerAuth, getStoreHandler);
@@ -35,6 +45,18 @@ export function buildApp(ctx: ApiContext): Hono<{ Variables: { api: ApiContext; 
   app.get('/api/orders', bearerAuth, listOrdersHandler);
   app.get('/api/orders/:id', bearerAuth, getOrderHandler);
   app.post('/api/orders-sync/:storeId', bearerAuth, syncOrdersHandler);
+
+  // Catalog & inventory
+  app.get('/api/stores/:storeId/products', bearerAuth, listProductsHandler);
+  app.post('/api/stores/:storeId/products', bearerAuth, createProductHandler);
+  app.get('/api/products/:productId', bearerAuth, getProductHandler);
+  app.get('/api/stores/:storeId/inventory', bearerAuth, listInventoryHandler);
+  app.post('/api/inventory/adjust', bearerAuth, adjustInventoryHandler);
+
+  // Channel & OAuth
+  app.get('/api/stores/:storeId/channels', bearerAuth, listChannelsHandler);
+  app.get('/api/stores/:storeId/oauth/:platform/authorize', bearerAuth, authorizeChannelHandler);
+  app.post('/api/oauth/:platform/callback', oauthCallbackHandler);
 
   // Webhook receiver — per-platform signature di controller
   app.post('/webhooks/:platform', webhookReceiverHandler);

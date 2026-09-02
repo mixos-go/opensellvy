@@ -19,6 +19,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@opensellvy/core": "workspace:*",
     "@opensellvy/types": "workspace:*"
   },
   "license": "MIT"

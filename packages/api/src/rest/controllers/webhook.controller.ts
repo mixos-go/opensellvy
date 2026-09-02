@@ -8,7 +8,7 @@ import type { ApiEnv } from '../../env';
  * 3. map event+payload → bentuk internal, lalu emit ke event bus (jika ada)
  */
 export const webhookReceiverHandler: Handler<ApiEnv> = async (c) => {
-  const platform = c.req.param('platform');
+  const platform = c.req.param('platform')!;
   const api = c.get('api');
 
   let plugin: { webhook?: { verify(p: unknown, sig: string): Promise<boolean>; map(e: string, p: unknown): Promise<{ type: string; data: unknown }> } } | undefined;
@@ -31,6 +31,6 @@ export const webhookReceiverHandler: Handler<ApiEnv> = async (c) => {
   }
 
   const mapped = await plugin.webhook.map(event, rawBody);
-  void mapped;
+  await api.onWebhook?.({ platform, event, type: mapped.type, data: mapped.data, signature });
   return c.json({ received: true, type: mapped.type }, 200);
 };

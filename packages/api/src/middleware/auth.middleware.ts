@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { hmacSign } from '@opensellvy/core';
+import type { ApiEnv } from '../env';
 
 /**
  * Auth middleware — verifikasi bearer token berbasis HMAC (self-contained,
@@ -38,15 +39,20 @@ export function signApiToken(secret: string, userId: string, scope = 'api'): str
 }
 
 /**
- * Auth middleware — apply ke route yang butuh login.
- * Bila jwtSecret tidak di-set, request dianggap system (fail-open untuk dev),
- * tapi saat secret ada, token invalid → 401.
+ * Auth middleware (fail-closed default).
+ * - authMode 'open'→ sistem (dev).
+ * - default 'closed': tanpa jwtSecret → 401 AUTH_NOT_CONFIGURED;
+ *   token invalid → 401; valid → attach user.
  */
-export const bearerAuth: MiddlewareHandler<{ Variables: { api: { secrets?: { jwtSecret?: string } }; user?: { userId: string; scope: string; authenticated: boolean } } }> = async (c, next) => {
-  const secret = c.get('api').secrets?.jwtSecret;
-  if (!secret) {
+export const bearerAuth: MiddlewareHandler<ApiEnv> = async (c, next) => {
+  const api = c.get('api');
+  if (api.authMode === 'open') {
     c.set('user', { userId: 'system', scope: 'api', authenticated: true });
     return next();
+  }
+  const secret = api.secrets?.jwtSecret;
+  if (!secret) {
+    return c.json({ error: { code: 'AUTH_NOT_CONFIGURED', message: 'jwtSecret belum di-set — auth fail-closed' } }, 401);
   }
   const header = c.req.header('Authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';

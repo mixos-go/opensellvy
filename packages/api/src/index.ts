@@ -19,6 +19,8 @@ export interface ApiConfig {
   corsOrigin?: string | string[];
   jwtSecret?: string;
   webhookSecrets?: Record<string, string>;
+  /** 'closed' (default): semua /api wajib bearer token; 'open': mode dev tanpa auth. */
+  authMode?: 'closed' | 'open';
 }
 
 export interface ApiDeps {
@@ -26,6 +28,8 @@ export interface ApiDeps {
   registry: ConnectorRegistry;
   tokens?: ApiContext['tokens'];
   credentials?: ApiContext['credentials'];
+  /** dispatch webhook terverifikasi ke lapisan aplikasi (sync/event/worker). */
+  onWebhook?: ApiContext['onWebhook'];
 }
 
 export interface OpenSellvyServer {
@@ -45,6 +49,8 @@ export function createServer(config: ApiConfig = {}, deps: ApiDeps): OpenSellvyS
     registry: deps.registry,
     tokens: deps.tokens,
     credentials: deps.credentials,
+    onWebhook: deps.onWebhook,
+    authMode: config.authMode ?? 'closed',
     secrets: {
       jwtSecret: config.jwtSecret,
       webhook: config.webhookSecrets,

@@ -21,7 +21,7 @@ export const tokopediaPlugin: PlatformPlugin = {
   auth: {
     getAuthorizeUrl: () => Promise.resolve(''),
     exchangeCode: () => Promise.resolve({ accessToken: '' }),
-    refreshToken: () => Promise.resolve(),
+    refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {
     getShop: () => Promise.resolve({ platformShopId: '', shopName: '', marketplace: '' }),

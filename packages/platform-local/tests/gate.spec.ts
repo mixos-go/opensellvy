@@ -25,7 +25,7 @@ describe('one-gate end-to-end dengan adapter LOCAL (tanpa platform API)', () => 
 
   beforeEach(() => {
     store = new LocalStore();
-    connectors.register(createLocalPlugin({ store }));
+    connectors.register(createLocalPlugin({ store }), { replace: true });
     services = createServices({ deps: deps() });
   });
 

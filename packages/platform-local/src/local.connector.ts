@@ -30,7 +30,7 @@ export function createLocalPlugin(options: LocalPluginOptions = {}): PlatformPlu
     auth: {
       getAuthorizeUrl: () => Promise.resolve('memory://local/authorize?shop=local'),
       exchangeCode: () => Promise.resolve(token),
-      refreshToken: () => Promise.resolve(),
+      refreshToken: () => Promise.resolve({ ...token, expiresAt: Date.now() + 24 * 60 * 60 * 1000 }),
     },
     gateway: {
       getShop: (context) =>
@@ -111,7 +111,7 @@ export function registerLocal(): void {
     sharedStore = new LocalStore();
     shared = createLocalPlugin({ store: sharedStore });
   }
-  registerPlatform(shared);
+  registerPlatform(shared, { replace: true });
 }
 
 export function getLocalStore(): LocalStore | undefined {

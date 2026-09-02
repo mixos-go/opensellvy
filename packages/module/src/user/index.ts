@@ -1,1 +1,0 @@
-export type { UserModule } from './user.service';

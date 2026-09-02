@@ -1,1 +1,0 @@
-export type { StoreModule } from './store.service';

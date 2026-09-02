@@ -1,1 +1,0 @@
-export type { Warehouse, WarehouseModule } from './warehouse.service';

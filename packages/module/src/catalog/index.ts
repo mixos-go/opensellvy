@@ -1,1 +1,0 @@
-export type { CatalogModule } from './catalog.service';

@@ -1,1 +1,0 @@
-export type { NotificationModule } from './notification.service';

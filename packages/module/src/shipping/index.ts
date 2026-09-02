@@ -1,1 +1,0 @@
-export type { ShippingModule } from './shipping.service';

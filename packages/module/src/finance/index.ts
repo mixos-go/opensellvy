@@ -1,1 +1,0 @@
-export type { FinanceModule } from './finance.service';

@@ -1,1 +1,0 @@
-export type { ChannelModule } from './channel.service';

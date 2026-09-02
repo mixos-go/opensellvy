@@ -9,6 +9,17 @@ export interface AnalyticsModuleImpl {
   topProducts(filter: AnalyticsFilter, limit?: number): Promise<TopProductRow[]>;
 }
 
+const HOUR = 3_600_000;
+
+function avgFulfillmentHours(orders: Array<{ createdAt: string; shipping?: { shippedAt?: string } }>): number {
+  const shipped = orders
+    .filter((o) => o.shipping?.shippedAt && o.createdAt)
+    .map((o) => (new Date(o.shipping!.shippedAt!).getTime() - new Date(o.createdAt).getTime()) / HOUR)
+    .filter((h) => Number.isFinite(h) && h >= 0);
+  if (!shipped.length) return 0;
+  return Math.round((shipped.reduce((a, b) => a + b, 0) / shipped.length) * 10) / 10;
+}
+
 export function analyticsModule(deps: ModuleDeps): AnalyticsModuleImpl {
   const { repos } = deps;
 
@@ -26,7 +37,10 @@ export function analyticsModule(deps: ModuleDeps): AnalyticsModuleImpl {
       const orders = await collect(filter);
       const gross = orders.reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
       const net = orders.reduce((sum, o) => sum + (o.totals.grandTotal.amount - o.totals.discount.amount), 0);
-      const refunded = orders.filter((o) => o.status === 'returned' || o.status === 'cancelled').reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
+      const { items: all } = await repos.orders.find({ storeId: filter.storeId, from: filter.from, to: filter.to, platform: filter.platform, limit: 100_000 });
+      const refunded = all
+        .filter((o) => o.status === 'returned' || o.status === 'cancelled')
+        .reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
       const sold = orders.reduce((sum, o) => sum + o.lines.reduce((s, l) => s + l.quantity, 0), 0);
       return {
         grossRevenue: { amount: gross, currency: 'IDR' },
@@ -38,23 +52,31 @@ export function analyticsModule(deps: ModuleDeps): AnalyticsModuleImpl {
     },
 
     async channelPerformance(filter) {
-      const orders = await collect(filter);
-      const byPlatform = new Map<string, typeof orders>();
-      for (const o of orders) {
+      const { items: all } = await repos.orders.find({ storeId: filter.storeId, from: filter.from, to: filter.to, platform: filter.platform, limit: 100_000 });
+      const kept = all.filter((o) => o.status !== 'cancelled' && o.status !== 'failed');
+      const byPlatform = new Map<string, typeof kept>();
+      for (const o of kept) {
         const list = byPlatform.get(o.platform) ?? [];
         list.push(o);
         byPlatform.set(o.platform, list);
       }
+      const byPlatformAll = new Map<string, typeof all>();
+      for (const o of all) {
+        const list = byPlatformAll.get(o.platform) ?? [];
+        list.push(o);
+        byPlatformAll.set(o.platform, list);
+      }
       const out: ChannelPerformance[] = [];
       for (const [platform, list] of byPlatform) {
         const gross = list.reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
-        const cancelled = list.filter((o) => o.status === 'cancelled').length;
+        const allList = byPlatformAll.get(platform) ?? [];
+        const cancelled = allList.filter((o) => o.status === 'cancelled').length;
         out.push({
           platform: platform as PlatformCode,
-          orderCount: list.length,
+          orderCount: allList.length,
           grossRevenue: { amount: gross, currency: 'IDR' },
-          cancellationRate: list.length ? Math.round((cancelled / list.length) * 100) : 0,
-          avgFulfillmentHours: 0,
+          cancellationRate: allList.length ? Math.round((cancelled / allList.length) * 100) : 0,
+          avgFulfillmentHours: avgFulfillmentHours(list),
         });
       }
       return out;

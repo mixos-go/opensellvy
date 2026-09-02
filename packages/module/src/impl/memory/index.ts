@@ -223,13 +223,24 @@ export class MemoryRepositories {
   };
 
   readonly analyticsRepo = {
-    getSalesSummary: async (_storeId: string, _from: string, _to: string): Promise<SalesSummary> => ({
-      grossRevenue: { amount: 0, currency: 'IDR' },
-      netRevenue: { amount: 0, currency: 'IDR' },
-      orderCount: 0,
-      soldItemCount: 0,
-      refundAmount: { amount: 0, currency: 'IDR' },
-    }),
+    getSalesSummary: async (storeId: string, from: string, to: string): Promise<SalesSummary> => {
+      const items = [...this.orders.values()].filter(
+        (o) => o.storeId === storeId && o.createdAt >= from && o.createdAt <= to && o.status !== 'cancelled' && o.status !== 'failed',
+      );
+      const gross = items.reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
+      const net = items.reduce((sum, o) => sum + (o.totals.grandTotal.amount - o.totals.discount.amount), 0);
+      const refunded = [...this.orders.values()]
+        .filter((o) => o.storeId === storeId && o.createdAt >= from && o.createdAt <= to && (o.status === 'returned' || o.status === 'cancelled'))
+        .reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
+      const sold = items.reduce((sum, o) => sum + o.lines.reduce((s, l) => s + l.quantity, 0), 0);
+      return {
+        grossRevenue: { amount: gross, currency: 'IDR' },
+        netRevenue: { amount: net, currency: 'IDR' },
+        orderCount: items.length,
+        soldItemCount: sold,
+        refundAmount: { amount: refunded, currency: 'IDR' },
+      };
+    },
   };
 
   // aggregation in Repositories shape (rules of memory repo flat maps above)

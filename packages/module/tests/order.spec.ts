@@ -28,7 +28,7 @@ const dummy: PlatformPlugin = {
   auth: {
     getAuthorizeUrl: () => Promise.resolve('http://local/authorize'),
     exchangeCode: () => Promise.resolve(token),
-    refreshToken: () => Promise.resolve(),
+    refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {
     getShop: () => Promise.resolve(baseShop),
@@ -79,7 +79,7 @@ describe('order module — satu gate (domain logic tanpa platform hardcode)', ()
     orderCounter = 0;
     shopCounter = 0;
     seeded.clear();
-    connectors.register(dummy);
+    connectors.register(dummy, { replace: true });
   });
 
   it('connect channel via OAuth, lalu sync menarik order dari adapter', async () => {
@@ -202,5 +202,40 @@ describe('order module — satu gate (domain logic tanpa platform hardcode)', ()
     const services = createServices({ deps: { registry: connectors } });
     const res = await services.orders.sync('store-1');
     expect(res.created).toBe(0);
+  });
+
+  it('lazy-refresh token saat expiresAt mendekati kedaluwarsa, lalu dipersist', async () => {
+    let refreshed = 0;
+    const plugin = connectors.get('local');
+    plugin.auth.refreshToken = () => {
+      refreshed += 1;
+      return Promise.resolve({ accessToken: 'fresh', refreshToken: 'fresh-refresh', expiresAt: Date.now() + 3600_000 });
+    };
+
+    const tokens = memoryTokenStore();
+    // simpan token yang SUDAH kedaluwarsa
+    await tokens.save('store-1', 'local', { accessToken: 'stale', expiresAt: Date.now() - 1_000 });
+
+    const services = createServices({ deps: { registry: connectors, tokens, credentials: async () => ({ appId: 'a', secret: 's', redirectUri: 'http://cb' }) } });
+    let lastToken = '';
+    plugin.gateway.syncInventory = (_c, _items) => {
+      lastToken = _c.token.accessToken;
+      return Promise.resolve();
+    };
+
+    await services.channels.connect({ storeId: 'store-1', platform: 'local', oauth: { code: 'c' } });
+    const product = await services.products.create({
+      storeId: 'store-1', name: 'P', description: 'x',
+      variants: [{ id: 'v1', sku: 'SKU-R', options: {}, price: { amount: 10_000, currency: 'IDR' }, stock: 0 }],
+      images: [], categoryIds: [], attributes: {}, status: 'active',
+    });
+    await services.inventory.ensureFromProduct(product, 'wh-1');
+    await services.inventory.syncToChannels('store-1');
+
+    expect(refreshed).toBeGreaterThan(0);
+    expect(lastToken).toBe('fresh');
+    // token baru ter-persist
+    const persisted = await tokens.get('store-1', 'local');
+    expect(persisted.accessToken).toBe('fresh');
   });
 });

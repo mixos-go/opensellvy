@@ -1,5 +1,12 @@
 import type { ID, ISO8601 } from '@opensellvy/types';
-import type { ConnectorRegistry, TokenStore, PlatformCredentials, ConnectorContext } from '@opensellvy/connector';
+import type {
+  ConnectorRegistry,
+  TokenStore,
+  PlatformCredentials,
+  ConnectorContext,
+  PlatformPlugin,
+  OAuthToken,
+} from '@opensellvy/connector';
 import type { Repositories } from '../ports';
 
 export interface EventEmitterLike {
@@ -41,19 +48,56 @@ export function requireCredentials(deps: ModuleDeps): NonNullable<ModuleDeps['cr
   return deps.credentials;
 }
 
-/** Bangun ConnectorContext per (storeId, platform) dari token tersimpan + credential store. */
+/** Bangun ConnectorContext per (storeId, platform) dari token tersimpan + credential store.
+ *  Menjalankan lazy refresh bila token hampir/sudah kedaluwarsa. */
 export async function channelContext(
   deps: ModuleDeps,
   storeId: ID,
   platform: string,
 ): Promise<ConnectorContext> {
   if (!deps.tokens || !deps.credentials) throw new Error('channel OAuth (tokens/credentials) belum dikonfigurasi');
-  const token = await deps.tokens.get(storeId, platform);
+  const plugin = deps.registry.get(platform as never);
+  if (!plugin) throw new Error(`Platform "${platform}" not registered`);
+
+  let token = await deps.tokens.get(storeId, platform);
   if (!token) throw new Error(`Token not found for ${platform}@${storeId}`);
+
+  if (isTokenExpired(token)) {
+    token = await refreshAndPersist(deps, plugin, storeId, platform);
+  }
+
   return {
     storeId,
     platformAccountId: `${storeId}:${platform}`,
     credentials: await deps.credentials(storeId, platform),
     token,
   };
+}
+
+/** Token fresh jika tidak ada expiresAt, atau masih lebih dari REFRESH_MARGIN_MS. */
+const REFRESH_MARGIN_MS = 60_000;
+
+function isTokenExpired(token: { expiresAt?: number }): boolean {
+  if (!token.expiresAt) return false;
+  return Date.now() >= token.expiresAt - REFRESH_MARGIN_MS;
+}
+
+async function refreshAndPersist(
+  deps: ModuleDeps,
+  plugin: PlatformPlugin,
+  storeId: ID,
+  platform: string,
+): Promise<OAuthToken> {
+  if (!deps.tokens) throw new Error('channel OAuth (tokens) belum dikonfigurasi');
+  const credentials = requireCredentials(deps);
+  const current = await deps.tokens.get(storeId, platform);
+  if (!current) throw new Error(`Token not found for ${platform}@${storeId}`);
+  const fresh = await plugin.auth.refreshToken({
+    storeId,
+    platformAccountId: `${storeId}:${platform}`,
+    credentials: await credentials(storeId, platform),
+    token: current,
+  });
+  await deps.tokens.save(storeId, platform, fresh);
+  return fresh;
 }

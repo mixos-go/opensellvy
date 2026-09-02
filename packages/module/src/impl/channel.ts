@@ -1,6 +1,6 @@
 import type { ChannelConnection, ConnectChannelInput, ID, PlatformCode } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds, requireToken } from './deps';
+import { buildIds, channelContext, requireToken } from './deps';
 
 export interface ChannelModuleImpl {
   /** mulai OAuth — return authorize URL utk redirect UI */
@@ -92,7 +92,9 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
     async refresh(channelId) {
       const channel = await requireChannel(channelId);
       const plugin = registry.get(channel.platform);
-      await plugin.auth.refreshToken();
+      const context = await channelContext(deps, channel.storeId, channel.platform);
+      const token = await plugin.auth.refreshToken(context);
+      await deps.tokens?.save(channel.storeId, channel.platform, token);
       await repos.channels.save({ ...channel, updatedAt: now(), auth: { ...channel.auth, lastTokenRefreshAt: now() } });
       return requireChannel(channelId);
     },

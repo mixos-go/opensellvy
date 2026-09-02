@@ -1,13 +1,8 @@
 import type { PlatformCode } from '@opensellvy/types';
 
 export interface OpenSellvyConfig {
-  appId?: string;
-  appSecret?: string;
-  apiKey?: string;
   environment?: 'production' | 'sandbox';
   databaseUrl?: string;
-  redisUrl?: string;
-  jwtSecret?: string;
   platforms?: Partial<Record<PlatformCode, PlatformConfig>>;
 }
 

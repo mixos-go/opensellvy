@@ -103,18 +103,29 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     async pullOrders(context, opts) {
       const client = shopClient(context);
       const entry = tokenFor(context);
-      const list = await client.request<{ orders?: Array<{ order_sn?: string }>; more?: boolean }>(
-        { apiType: 'shop', path: '/api/v2/order/get_order_list', method: 'GET', params: { time_range_field: 'create_time', page_size: 100 } },
+      const list = await client.request<{ order_list?: Array<{ order_sn?: string }>; more?: boolean }>(
+        {
+          apiType: 'shop',
+          path: '/api/v2/order/get_order_list',
+          method: 'GET',
+          params: {
+            time_range_field: 'create_time',
+            time_from: (opts?.since ? opts.since.getTime() / 1000 : Math.floor(Date.now() / 1000) - 7 * 86400),
+            time_to: Math.floor(Date.now() / 1000),
+            page_size: 100,
+          },
+        },
         shopOpts(entry),
       );
-      const ids = (list.orders ?? []).map((o) => o.order_sn).filter((x): x is string => !!x);
+      const ids = (list.order_list ?? []).map((o) => o.order_sn).filter((x): x is string => !!x);
       if (ids.length === 0) return [];
-      const detail = await client.request<{ order?: ShopeeOrderDetail }>(
+      const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
         { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: ids.join(',') } },
         shopOpts(entry),
       );
-      const rawOrder = detail.order ?? {};
-      const domain = mapOrder(context.storeId, context.platformAccountId, 'shopee', rawOrder);
+      const orderList = detail.order_list ?? [];
+      if (orderList.length === 0) return [];
+      const domain = mapOrder(context.storeId, context.platformAccountId, 'shopee', orderList[0]!);
       if (opts?.since && domain.createdAt && new Date(domain.createdAt).getTime() < opts.since.getTime()) {
         return [];
       }
@@ -124,11 +135,16 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     async getOrder(context, platformOrderId) {
       const client = shopClient(context);
       const entry = tokenFor(context);
-      const detail = await client.request<{ order?: ShopeeOrderDetail }>(
+      const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
         { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: platformOrderId } },
         shopOpts(entry),
       );
-      return mapOrder(context.storeId, context.platformAccountId, 'shopee', detail.order ?? { order_sn: platformOrderId });
+      return mapOrder(
+        context.storeId,
+        context.platformAccountId,
+        'shopee',
+        detail.order_list?.[0] ?? ({ order_sn: platformOrderId } as ShopeeOrderDetail),
+      );
     },
 
     async pushOrder(_context, _order) {

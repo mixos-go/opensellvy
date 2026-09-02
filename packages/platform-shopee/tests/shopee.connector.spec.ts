@@ -53,10 +53,10 @@ describe('Shopee connector gateway (stub fetch)', () => {
         if (url.pathname.includes('/get_order_detail')) {
           return {
             error: '',
-            response: { order: { order_sn: 'ORD1', order_status: 'READY_TO_SHIP', currency: 'IDR' } },
+            response: { order_list: [{ order_sn: 'ORD1', order_status: 'READY_TO_SHIP', currency: 'IDR' }] },
           };
         }
-        return { error: '', response: { orders: [{ order_sn: 'ORD1' }], more: false } };
+        return { error: '', response: { order_list: [{ order_sn: 'ORD1' }], more: false } };
       }),
     });
     const orders = await plugin.gateway.pullOrders(context() as never);
@@ -70,7 +70,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
       now: () => TS,
       fetch: route(() => ({
         error: '',
-        response: { order: { order_sn: 'OLD', create_time: 1600000000 } },
+        response: { order_list: [{ order_sn: 'OLD', create_time: 1600000000 }] },
       })),
     });
     const orders = await plugin.gateway.pullOrders(context() as never, { since: new Date('2023-01-01') });

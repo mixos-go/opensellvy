@@ -36,9 +36,9 @@ function toOAuthToken(raw: RawTokenResponse): OAuthToken {
         : raw.scope.split(/[ ,]+/).filter(Boolean);
   return {
     accessToken: raw.access_token ?? '',
-    refreshToken: raw.refresh_token,
-    expiresAt: typeof raw.expires_in === 'number' ? Date.now() + raw.expires_in * 1000 : undefined,
-    scope: scopes,
+    ...(raw.refresh_token !== undefined ? { refreshToken: raw.refresh_token } : {}),
+    ...(typeof raw.expires_in === 'number' ? { expiresAt: Date.now() + raw.expires_in * 1000 } : {}),
+    ...(scopes !== undefined ? { scope: scopes } : {}),
   };
 }
 
@@ -55,7 +55,10 @@ export interface OAuthClientOptions {
  */
 export function createOAuthClient(options: OAuthClientOptions): OAuthService {
   const { providers } = options;
-  const http = new HttpClient({ baseUrl: '', fetch: options.fetch });
+  const http = new HttpClient({
+    baseUrl: '',
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+  });
 
   const config = (platform: string): OAuthConfiguration => {
     const provider = providers[platform];

@@ -8,7 +8,7 @@ export interface CatalogModuleImpl {
   list(storeId: string, opts?: { query?: string; cursor?: string; limit?: number }): Promise<Paginated<UnifiedProduct & { available?: number }>>;
 }
 
-export function catalogModule(deps: ModuleDeps, product: ProductModuleImpl, inventory: InventoryModuleImpl): CatalogModuleImpl {
+export function catalogModule(deps: ModuleDeps, product: ProductModuleImpl, _inventory: InventoryModuleImpl): CatalogModuleImpl {
   const { repos } = deps;
 
   return {

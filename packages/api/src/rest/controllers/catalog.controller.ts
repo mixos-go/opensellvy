@@ -8,7 +8,7 @@ export const listProductsHandler: Handler<ApiEnv> = async (c) => {
   const storeId = c.req.param('storeId')!;
   const cursor = c.req.query('cursor');
   const limit = Number(c.req.query('limit') ?? 50);
-  const list = await services.products.list(storeId, { cursor, limit });
+  const list = await services.products.list(storeId, { limit, ...(cursor !== undefined ? { cursor } : {}) });
   return c.json(list, 200);
 };
 
@@ -67,6 +67,6 @@ export const oauthCallbackHandler: Handler<ApiEnv> = async (c) => {
   if (!body.storeId || !body.code) {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: 'storeId dan code wajib diisi' } }, 400);
   }
-  const connection = await services.channels.connect({ storeId: body.storeId, platform, oauth: { code: body.code, state: body.state } });
+  const connection = await services.channels.connect({ storeId: body.storeId, platform, oauth: { code: body.code, ...(body.state !== undefined ? { state: body.state } : {}) } });
   return c.json(connection, 201);
 };

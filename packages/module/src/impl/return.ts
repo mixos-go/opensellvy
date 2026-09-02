@@ -1,4 +1,4 @@
-import type { ID, ReturnRequest, ReturnStatus } from '@opensellvy/types';
+import type { ReturnRequest, ReturnStatus } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
 import { buildIds, channelContext } from './deps';
 

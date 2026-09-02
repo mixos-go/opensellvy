@@ -61,7 +61,7 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
           state: 'connected',
           connectedAt: existing?.auth.connectedAt ?? stamp,
           lastTokenRefreshAt: stamp,
-          expiresAt: token.expiresAt ? new Date(token.expiresAt).toISOString() : undefined,
+          ...(token.expiresAt ? { expiresAt: new Date(token.expiresAt).toISOString() } : {}),
         },
         settings: existing?.settings ?? { autoPullOrders: true, autoSyncInventory: true },
         createdAt: existing?.createdAt ?? stamp,

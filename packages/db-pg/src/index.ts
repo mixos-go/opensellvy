@@ -1,12 +1,12 @@
 import { and, arrayContains, count, desc, eq, gte, ilike, inArray, or, lte } from 'drizzle-orm';
 import type {
   UnifiedOrder,
-  OrderFilter,
+
   UnifiedProduct,
   InventoryItem,
   StockMovement,
   UnifiedCustomer,
-  CustomerFilter,
+
   ChannelConnection,
   Store,
   Warehouse,
@@ -19,7 +19,7 @@ import type {
   AuditLog,
   User,
   StoreMember,
-  SalesSummary,
+
   Paginated,
 } from '@opensellvy/types';
 import type { Repositories } from '@opensellvy/module';
@@ -161,7 +161,7 @@ export class PostgresRepositories {
       return paginate(
         rows.map((r) => r.payload as UnifiedOrder),
         rows.length,
-        { cursor: filter.cursor, limit: filter.limit },
+        { ...(filter.limit !== undefined ? { limit: filter.limit } : {}), ...(filter.cursor !== undefined ? { cursor: filter.cursor } : {}) },
       );
     },
     findById: async (id) => (await this.db.query.orders.findFirst({
@@ -234,7 +234,7 @@ export class PostgresRepositories {
       return paginate(
         rows.map((r) => r.payload as UnifiedProduct),
         rows.length,
-        { cursor: opts?.cursor, limit: opts?.limit },
+        { ...(opts?.limit !== undefined ? { limit: opts.limit } : {}), ...(opts?.cursor !== undefined ? { cursor: opts.cursor } : {}) },
       );
     },
     delete: async (id) => void this.db.delete(products).where(eq(products.id, id)),
@@ -312,8 +312,8 @@ export class PostgresRepositories {
         type: r.type as StockMovement['type'],
         quantity: r.quantity,
         reason: r.reason,
-        referenceId: r.referenceId ?? undefined,
-        actorId: r.actorId ?? undefined,
+        ...(r.referenceId !== null ? { referenceId: r.referenceId } : {}),
+        ...(r.actorId !== null ? { actorId: r.actorId } : {}),
         occurredAt: r.occurredAt.toISOString(),
       }));
     },
@@ -384,7 +384,7 @@ export class PostgresRepositories {
       return paginate(
         rows.map((r) => r.payload as UnifiedCustomer),
         rows.length,
-        { cursor: filter.cursor, limit: filter.limit },
+        { ...(filter.limit !== undefined ? { limit: filter.limit } : {}), ...(filter.cursor !== undefined ? { cursor: filter.cursor } : {}) },
       );
     },
   };
@@ -798,10 +798,10 @@ function mapStore(r: { id: string; name: string; slug: string; logoUrl: string |
     id: r.id,
     name: r.name,
     slug: r.slug,
-    logoUrl: r.logoUrl ?? undefined,
     config: r.config,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    ...(r.logoUrl !== null ? { logoUrl: r.logoUrl } : {}),
   };
 }
 
@@ -916,11 +916,11 @@ function mapRefreshSession(r: {
     id: r.id,
     userId: r.userId,
     email: r.email,
-    storeId: r.storeId ?? undefined,
     role: r.role as RoleCode,
     createdAt: r.createdAt.toISOString(),
     expiresAt: r.expiresAt.toISOString(),
     tokenHash: r.tokenHash,
+    ...(r.storeId !== null ? { storeId: r.storeId } : {}),
   };
 }
 

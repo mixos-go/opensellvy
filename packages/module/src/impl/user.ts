@@ -1,4 +1,4 @@
-import type { ID, StoreMember, User, UserRole } from '@opensellvy/types';
+import type { StoreMember, User, UserRole } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
 import { buildIds } from './deps';
 

@@ -30,14 +30,14 @@ export function customerModule(deps: ModuleDeps): CustomerModuleImpl {
         id: id(),
         storeId: input.storeId,
         name: input.name,
-        email: input.email,
-        phone: input.phone,
         addresses: input.addresses ?? [],
         platformProfiles: [],
         tags: input.tags ?? [],
-        notes: input.notes,
         createdAt: stamp,
         updatedAt: stamp,
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
       };
       return repos.customers.save(customer);
     },
@@ -60,8 +60,13 @@ export function customerModule(deps: ModuleDeps): CustomerModuleImpl {
         const merged = await repos.customers.save({
           ...existing,
           name: profile.name || existing.name,
-          phone: profile.phone || existing.phone,
-          platformProfiles: [{ platform: profile.platform, platformUserId: profile.platformUserId, username: profile.username, channelId: profile.channelId }, ...existing.platformProfiles.filter((p) => p.platformUserId !== profile.platformUserId)],
+          ...(profile.phone ? { phone: profile.phone } : {}),
+          platformProfiles: [{
+            platform: profile.platform,
+            platformUserId: profile.platformUserId,
+            username: profile.username,
+            ...(profile.channelId !== undefined ? { channelId: profile.channelId } : {}),
+          }, ...existing.platformProfiles.filter((p) => p.platformUserId !== profile.platformUserId)],
           updatedAt: stamp,
         });
         return merged;
@@ -70,12 +75,17 @@ export function customerModule(deps: ModuleDeps): CustomerModuleImpl {
         id: id(),
         storeId,
         name: profile.name,
-        phone: profile.phone,
         addresses: [],
-        platformProfiles: [{ platform: profile.platform, platformUserId: profile.platformUserId, username: profile.username, channelId: profile.channelId }],
+        platformProfiles: [{
+          platform: profile.platform,
+          platformUserId: profile.platformUserId,
+          username: profile.username,
+          ...(profile.channelId !== undefined ? { channelId: profile.channelId } : {}),
+        }],
         tags: [],
         createdAt: stamp,
         updatedAt: stamp,
+        ...(profile.phone ? { phone: profile.phone } : {}),
       };
       return repos.customers.save(customer);
     },

@@ -1,4 +1,4 @@
-import type { ID, Warehouse, WarehouseStatus } from '@opensellvy/types';
+import type { Warehouse, WarehouseStatus } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
 import { buildIds } from './deps';
 

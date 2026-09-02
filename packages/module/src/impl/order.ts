@@ -55,7 +55,7 @@ export interface OrderModuleImpl {
 
 export function orderModule(deps: ModuleDeps): OrderModuleImpl {
   const { repos, registry } = deps;
-  const { id, now } = buildIds(deps);
+  const { now } = buildIds(deps);
 
   const requireOrder = async (orderId: string) => {
     const order = await repos.orders.findById(orderId);
@@ -81,7 +81,7 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
     async getByOrderNumber(storeId, orderNumber) {
       const { items } = await repos.orders.find({ storeId, orderNumber });
       if (!items.length) throw new Error(`Order #${orderNumber} not found`);
-      return items[0];
+      return items[0]!;
     },
 
     async updateStatus(orderId, update, actorId) {
@@ -89,8 +89,8 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
       const status = ACTION_TO_STATUS[update.action];
       const negotiated: Partial<UnifiedOrder> = {
         status,
-        subStatus: update.action === 'ship' ? 'fulfilled' : undefined,
         updatedAt: now(),
+        ...(update.action === 'ship' ? { subStatus: 'fulfilled' } : {}),
       };
       if (update.trackingNumber || update.courier) {
         negotiated.shipping = {

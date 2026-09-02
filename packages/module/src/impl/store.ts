@@ -24,10 +24,10 @@ export function storeModule(deps: ModuleDeps): StoreModuleImpl {
         id: id(),
         name: input.name,
         slug: input.slug,
-        logoUrl: input.logoUrl,
         config: input.config ?? { timezone: 'Asia/Jakarta', currency: 'IDR' },
         createdAt: stamp,
         updatedAt: stamp,
+        ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
       };
       const saved = await repos.stores.save(store);
       if (ownerUserId) {

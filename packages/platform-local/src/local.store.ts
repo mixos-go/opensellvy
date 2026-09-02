@@ -73,11 +73,11 @@ export class LocalStore {
       },
       totals: { subtotal, shippingFee, discount, tax, grandTotal },
       status: seed.status ?? 'paid',
-      subStatus: seed.subStatus,
-      raw: seed.raw,
       paidAt: seed.paidAt ?? stamp,
       createdAt: seed.createdAt ?? stamp,
       updatedAt: seed.updatedAt ?? stamp,
+      ...(seed.subStatus !== undefined ? { subStatus: seed.subStatus } : {}),
+      ...(seed.raw !== undefined ? { raw: seed.raw } : {}),
     };
     this.orders.set(this.key(storeId, order.platformOrderId), order);
     return order;
@@ -120,7 +120,10 @@ export class LocalStore {
   }
 
   setStock(storeId: string, sku: string, stock: number, warehouseId?: string): void {
-    this.stock.set(this.key(storeId, sku), { stock, warehouseId });
+    this.stock.set(this.key(storeId, sku), {
+    stock,
+    ...(warehouseId !== undefined ? { warehouseId } : {}),
+  });
   }
 
   getStock(storeId: string, sku: string): number {

@@ -43,7 +43,7 @@ export class HttpError extends Error {
     super(message);
     this.name = 'HttpError';
     this.status = opts.status;
-    this.responseText = opts.responseText;
+    if (opts.responseText !== undefined) this.responseText = opts.responseText;
     this.request = opts.request;
   }
 }
@@ -123,8 +123,8 @@ export class HttpClient {
     const response = await this.fetchImpl(url, {
       method,
       headers,
-      body: payload,
-      signal,
+      ...(payload !== undefined ? { body: payload } : {}),
+      ...(signal ? { signal } : {}),
     });
 
     const responseText = await response.text();

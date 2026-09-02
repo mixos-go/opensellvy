@@ -57,7 +57,7 @@ export function createDefaultCourierRateProvider(): CourierRateProvider {
 
 export function shippingModule(deps: ModuleDeps, rates?: CourierRateProvider): ShippingModuleImpl {
   const { repos } = deps;
-  const { id, now } = buildIds(deps);
+  const { now } = buildIds(deps);
   const rateProvider = rates ?? createDefaultCourierRateProvider();
 
   return {
@@ -68,13 +68,13 @@ export function shippingModule(deps: ModuleDeps, rates?: CourierRateProvider): S
     async addTrackingEvent(orderId, event) {
       const shipments = await repos.shipments.findByOrder(orderId);
       if (!shipments.length) throw new Error(`No shipment for order ${orderId}`);
-      const current = shipments[0];
+      const current = shipments[0]!;
       const updated: Shipment = {
         ...current,
         status: event.status as unknown as Shipment['status'],
         events: [...current.events, { ...event, occurredAt: now() }],
         updatedAt: now(),
-      };
+      } as Shipment;
       await repos.shipments.save(updated);
       await deps.events?.emit('tracking.updated', { orderId, trackingNumber: updated.trackingNumber, status: updated.status });
       return updated;

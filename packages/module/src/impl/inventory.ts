@@ -58,7 +58,7 @@ export function inventoryModule(deps: ModuleDeps): InventoryModuleImpl {
       quantity: delta,
       reason: input.reason,
       referenceId: input.productId,
-      actorId,
+      ...(actorId !== undefined ? { actorId } : {}),
       occurredAt: now(),
     };
     await repos.inventory.addMovement(movement);
@@ -137,7 +137,7 @@ export function inventoryModule(deps: ModuleDeps): InventoryModuleImpl {
 async function skuOf(deps: ModuleDeps, productId: string): Promise<string> {
   const product = await deps.repos.products.findById(productId);
   if (!product || !product.variants.length) throw new Error(`Product ${productId} has no variant (sku)`);
-  return product.variants[0].sku;
+  return product.variants[0]!.sku;
 }
 
 async function resolveWarehouse(deps: ModuleDeps, sku: string, warehouseId?: ID): Promise<ID> {

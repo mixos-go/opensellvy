@@ -14,7 +14,6 @@ export function randomHex(bytes = 32): string {
 
 const ALGO = 'aes-256-gcm';
 const IV_BYTES = 12;
-const TAG_BYTES = 16;
 
 export interface CryptoOptions {
   key: string;

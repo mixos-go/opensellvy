@@ -77,4 +77,4 @@ export interface PlatformPlugin {
   webhook: PlatformWebhookHandler;
 }
 
-export interface PlatformConnector extends PlatformPlugin {}
+export type PlatformConnector = PlatformPlugin;

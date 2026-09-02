@@ -76,7 +76,7 @@ export class MemoryQueue implements Queue {
     try {
       const now = Date.now();
       for (let i = this.delayed.length - 1; i >= 0; i -= 1) {
-        if (this.delayed[i].runAt <= now) this.active.push(this.delayed.splice(i, 1)[0]);
+        if (this.delayed[i]!.runAt <= now) this.active.push(this.delayed.splice(i, 1)[0]!);
       }
       while (this.active.length > 0) {
         const job = this.active.shift()!;

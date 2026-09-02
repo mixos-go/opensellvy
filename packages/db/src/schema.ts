@@ -21,11 +21,9 @@ import type {
   Settlement,
   Shipment,
   Store,
-  StoreMember,
   UnifiedCustomer,
   UnifiedOrder,
   UnifiedProduct,
-  User,
   Warehouse,
 } from '@opensellvy/types';
 

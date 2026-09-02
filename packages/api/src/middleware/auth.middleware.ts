@@ -63,7 +63,7 @@ export const bearerAuth: MiddlewareHandler<ApiEnv> = async (c, next) => {
         userId: ctx.id,
         scope: 'api',
         authenticated: true,
-        storeId: ctx.storeId,
+        ...(ctx.storeId !== undefined ? { storeId: ctx.storeId } : {}),
         role: ctx.role,
         permissions: ctx.permissions,
         expiresAt: ctx.expiresAt,

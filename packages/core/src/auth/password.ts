@@ -23,13 +23,12 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
   const parts = encoded.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
-  const [, nStr, rStr, pStr, saltB64, hashB64] = parts;
-  const n = Number(nStr);
-  const r = Number(rStr);
-  const p = Number(pStr);
+  const n = Number(parts[1]);
+  const r = Number(parts[2]);
+  const p = Number(parts[3]);
   if (!Number.isInteger(n) || !Number.isInteger(r) || !Number.isInteger(p)) return false;
-  const expected = Buffer.from(hashB64, 'base64');
-  const derived = await derive(password, Buffer.from(saltB64, 'base64'), n, r, p, expected.length);
+  const expected = Buffer.from(parts[5]!, 'base64');
+  const derived = await derive(password, Buffer.from(parts[4]!, 'base64'), n, r, p, expected.length);
   return expected.length === derived.length && timingSafeEqual(expected, derived);
 }
 

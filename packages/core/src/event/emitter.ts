@@ -12,7 +12,7 @@ export class InProcessEventBus implements EventBus {
       payload,
       id: randomUUID(),
       occurredAt: new Date(),
-      storeId: opts?.storeId,
+      ...(opts?.storeId ? { storeId: opts.storeId } : {}),
     };
     const handlers = this.handlers.get(name);
     if (!handlers) return;

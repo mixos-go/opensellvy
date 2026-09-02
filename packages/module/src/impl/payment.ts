@@ -38,11 +38,11 @@ export function paymentModule(deps: ModuleDeps): PaymentModuleImpl {
         method,
         status: 'captured',
         amount: { amount: order.totals.grandTotal.amount, currency },
-        gateway,
         paidAt: stamp,
         refunds: [],
         createdAt: stamp,
         updatedAt: stamp,
+        ...(gateway !== undefined ? { gateway } : {}),
       };
       await repos.orders.update(orderId, { status: 'paid', paidAt: stamp, updatedAt: stamp });
       await repos.payments.save(payment);
@@ -58,7 +58,16 @@ export function paymentModule(deps: ModuleDeps): PaymentModuleImpl {
       const refunded = {
         ...payment,
         status,
-        refunds: [...payment.refunds, { id: id(), amount: { amount, currency: payment.amount.currency }, status: 'succeeded' as const, reason, createdAt: now() }],
+        refunds: [
+          ...payment.refunds,
+          {
+            id: id(),
+            amount: { amount, currency: payment.amount.currency },
+            status: 'succeeded' as const,
+            createdAt: now(),
+            ...(reason !== undefined ? { reason } : {}),
+          },
+        ],
         updatedAt: now(),
       };
       await repos.payments.save(refunded);

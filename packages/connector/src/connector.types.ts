@@ -1,4 +1,4 @@
-import type { PlatformCode, ID } from '@opensellvy/types';
+import type { ID } from '@opensellvy/types';
 
 export interface OAuthConfiguration {
   authorizeUrl: string;

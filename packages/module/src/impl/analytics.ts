@@ -24,7 +24,13 @@ export function analyticsModule(deps: ModuleDeps): AnalyticsModuleImpl {
   const { repos } = deps;
 
   async function collect(filter: { storeId: string; from: string; to: string; platform?: PlatformCode }) {
-    const { items } = await repos.orders.find({ storeId: filter.storeId, from: filter.from, to: filter.to, platform: filter.platform, limit: 100_000 });
+    const { items } = await repos.orders.find({
+      storeId: filter.storeId,
+      from: filter.from,
+      to: filter.to,
+      limit: 100_000,
+      ...(filter.platform ? { platform: filter.platform } : {}),
+    });
     return items.filter((o) => o.status !== 'cancelled' && o.status !== 'failed');
   }
 
@@ -37,7 +43,13 @@ export function analyticsModule(deps: ModuleDeps): AnalyticsModuleImpl {
       const orders = await collect(filter);
       const gross = orders.reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
       const net = orders.reduce((sum, o) => sum + (o.totals.grandTotal.amount - o.totals.discount.amount), 0);
-      const { items: all } = await repos.orders.find({ storeId: filter.storeId, from: filter.from, to: filter.to, platform: filter.platform, limit: 100_000 });
+      const { items: all } = await repos.orders.find({
+        storeId: filter.storeId,
+        from: filter.from,
+        to: filter.to,
+        limit: 100_000,
+        ...(filter.platform ? { platform: filter.platform } : {}),
+      });
       const refunded = all
         .filter((o) => o.status === 'returned' || o.status === 'cancelled')
         .reduce((sum, o) => sum + o.totals.grandTotal.amount, 0);
@@ -52,7 +64,13 @@ export function analyticsModule(deps: ModuleDeps): AnalyticsModuleImpl {
     },
 
     async channelPerformance(filter) {
-      const { items: all } = await repos.orders.find({ storeId: filter.storeId, from: filter.from, to: filter.to, platform: filter.platform, limit: 100_000 });
+      const { items: all } = await repos.orders.find({
+        storeId: filter.storeId,
+        from: filter.from,
+        to: filter.to,
+        limit: 100_000,
+        ...(filter.platform ? { platform: filter.platform } : {}),
+      });
       const kept = all.filter((o) => o.status !== 'cancelled' && o.status !== 'failed');
       const byPlatform = new Map<string, typeof kept>();
       for (const o of kept) {

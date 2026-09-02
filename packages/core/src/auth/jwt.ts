@@ -62,7 +62,6 @@ export function signJwt(payload: JwtPayload, options: JwtSignOptions): string {
   return `${signingInput}.${base64url(signature)}`;
 }
 
-const SIG_LEN = 64; // hex sha256
 
 /**
  * Verify JWT: signature timing-safe + expiry. Return reason bila tidak valid.
@@ -71,16 +70,19 @@ export function verifyJwt(token: string, secret: string, opts?: { audience?: str
   const parts = token.split('.');
   if (parts.length !== 3) return { valid: false, reason: 'malformed' };
 
-  const signingInput = `${parts[0]}.${parts[1]}`;
+  const header = parts[0]!;
+  const body = parts[1]!;
+  const sig = parts[2]!;
+  const signingInput = `${header}.${body}`;
   const expected = hmacSign(secret, signingInput);
-  const actual = fromBase64url(parts[2]).toString('hex');
+  const actual = fromBase64url(sig).toString('hex');
   if (actual.length !== expected.length || !timingSafeEqualHex(actual, expected)) {
     return { valid: false, reason: 'bad-signature' };
   }
 
   let payload: JwtPayload;
   try {
-    payload = JSON.parse(fromBase64url(parts[1]).toString('utf8')) as JwtPayload;
+    payload = JSON.parse(fromBase64url(body).toString('utf8')) as JwtPayload;
   } catch {
     return { valid: false, reason: 'malformed' };
   }

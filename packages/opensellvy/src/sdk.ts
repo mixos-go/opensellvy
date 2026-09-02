@@ -57,12 +57,12 @@ export class OpenSellvy {
     return createServices({
       deps: {
         registry: this.connectors,
-        tokens: this.options.tokens,
-        credentials,
-        events: this.options.events,
-        logger: this.options.logger,
+        ...(this.options.tokens !== undefined ? { tokens: this.options.tokens } : {}),
+        ...(credentials !== undefined ? { credentials } : {}),
+        ...(this.options.events !== undefined ? { events: this.options.events } : {}),
+        ...(this.options.logger !== undefined ? { logger: this.options.logger } : {}),
       },
-      repositories,
+      ...(repositories !== undefined ? { repositories } : {}),
     });
   }
 
@@ -94,7 +94,12 @@ export class OpenSellvy {
     return async (_storeId, platform) => {
       const pc = this.config.platforms?.[platform as PlatformCode];
       if (!pc) throw new Error(`Platform config "${platform}" tidak ada di config.platforms`);
-      return { appId: pc.appId, secret: pc.secret, redirectUri: pc.redirectUri, sandbox: pc.sandbox };
+      return {
+        appId: pc.appId,
+        secret: pc.secret,
+        redirectUri: pc.redirectUri,
+        ...(pc.sandbox !== undefined ? { sandbox: pc.sandbox } : {}),
+      };
     };
   }
 }

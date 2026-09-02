@@ -4,7 +4,7 @@ import type { ConnectorRegistry } from '@opensellvy/connector';
 import type { AuthService } from '@opensellvy/core';
 import { buildApp } from './rest/router';
 import type { ApiContext } from './context';
-import { ApiError } from './errors';
+
 
 export type { ApiContext } from './context';
 export * from './errors';
@@ -14,6 +14,13 @@ export { cors } from './middleware/cors';
 export { rateLimit } from './middleware/rate-limit';
 export { bearerAuth } from './middleware/auth.middleware';
 export type { AuthUser } from './env';
+
+function buildSecrets(config: ApiConfig): Pick<ApiContext, 'secrets'> {
+  const secret: ApiContext['secrets'] = {};
+  if (config.jwtSecret !== undefined) secret.jwtSecret = config.jwtSecret;
+  if (config.webhookSecrets !== undefined) secret.webhook = config.webhookSecrets;
+  return Object.keys(secret).length ? { secrets: secret } : {};
+}
 
 export interface ApiConfig {
   port?: number;
@@ -51,15 +58,12 @@ export function createServer(config: ApiConfig = {}, deps: ApiDeps): OpenSellvyS
   const context: ApiContext = {
     services: deps.services,
     registry: deps.registry,
-    tokens: deps.tokens,
-    credentials: deps.credentials,
-    onWebhook: deps.onWebhook,
-    authService: deps.authService,
     authMode: config.authMode ?? 'closed',
-    secrets: {
-      jwtSecret: config.jwtSecret,
-      webhook: config.webhookSecrets,
-    },
+    ...(deps.tokens !== undefined ? { tokens: deps.tokens } : {}),
+    ...(deps.credentials !== undefined ? { credentials: deps.credentials } : {}),
+    ...(deps.onWebhook !== undefined ? { onWebhook: deps.onWebhook } : {}),
+    ...(deps.authService !== undefined ? { authService: deps.authService } : {}),
+    ...(buildSecrets(config)),
   };
   const app = buildApp(context);
   let server: ServerType | undefined;

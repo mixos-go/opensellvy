@@ -53,6 +53,13 @@ export function createAuthService(deps: AuthDeps): AuthService {
   async function issue(user: { id: string; email: string; name?: string }, role: RoleCode, storeId?: string): Promise<LoginResult> {
     const now = new Date();
     const sessionId = randomJwtId();
+    const signOpts = {
+      secret: jwtSecret,
+      expiresInSeconds: accessTokenTtlSeconds,
+      jti: sessionId,
+      ...(issuer ? { issuer } : {}),
+      ...(audience ? { audience } : {}),
+    };
 
     const accessToken = signJwt(
       {
@@ -61,19 +68,19 @@ export function createAuthService(deps: AuthDeps): AuthService {
         ...(storeId ? { storeId } : {}),
         prm: ROLE_PERMISSIONS.get(role),
       },
-      { secret: jwtSecret, issuer, audience, expiresInSeconds: accessTokenTtlSeconds, jti: sessionId },
+      signOpts,
     );
 
     const refreshToken = signJwt(
       { sub: user.id, typ: 'refresh' },
-      { secret: jwtSecret, issuer, audience, expiresInSeconds: refreshTokenTtlSeconds, jti: sessionId },
+      { ...signOpts, expiresInSeconds: refreshTokenTtlSeconds },
     );
 
     const session: RefreshSession = {
       id: sessionId,
       userId: user.id,
       email: user.email,
-      storeId,
+      ...(storeId ? { storeId } : {}),
       role,
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + refreshTokenTtlSeconds * 1000).toISOString(),
@@ -86,7 +93,11 @@ export function createAuthService(deps: AuthDeps): AuthService {
       refreshToken,
       expiresIn: accessTokenTtlSeconds,
       sessionId,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        ...(user.name ? { name: user.name } : {}),
+      },
     };
   }
 
@@ -98,7 +109,10 @@ export function createAuthService(deps: AuthDeps): AuthService {
     },
 
     async refresh(refreshToken) {
-      const verified = verifyJwt(refreshToken, jwtSecret, { audience, issuer });
+      const verified = verifyJwt(refreshToken, jwtSecret, {
+        ...(audience ? { audience } : {}),
+        ...(issuer ? { issuer } : {}),
+      });
       if (!verified.valid) {
         fail(verified.reason === 'expired' ? 'SESSION_EXPIRED' : 'SESSION_INVALID', 'Refresh token tidak valid');
       }
@@ -127,7 +141,10 @@ export function createAuthService(deps: AuthDeps): AuthService {
     },
 
     async verifyToken(token) {
-      const verified = verifyJwt(token, jwtSecret, { audience, issuer });
+      const verified = verifyJwt(token, jwtSecret, {
+        ...(audience ? { audience } : {}),
+        ...(issuer ? { issuer } : {}),
+      });
       if (!verified.valid) {
         fail(verified.reason === 'expired' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID', 'Access token tidak valid');
       }
@@ -135,7 +152,7 @@ export function createAuthService(deps: AuthDeps): AuthService {
       const role = (payload.role as RoleCode) ?? 'viewer';
       const context: UserContext = {
         id: payload.sub,
-        storeId: typeof payload.storeId === 'string' ? payload.storeId : undefined,
+        ...(typeof payload.storeId === 'string' ? { storeId: payload.storeId } : {}),
         role,
         permissions: Array.isArray(payload.prm) ? (payload.prm as string[]) : (ROLE_PERMISSIONS.get(role) ?? []),
         expiresAt: new Date(payload.exp! * 1000).toISOString(),

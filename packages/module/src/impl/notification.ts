@@ -1,4 +1,4 @@
-import type { ID, Notification, NotificationChannel, NotificationStatus } from '@opensellvy/types';
+import type { Notification, NotificationChannel, NotificationStatus } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
 import { buildIds } from './deps';
 

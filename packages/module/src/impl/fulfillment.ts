@@ -39,7 +39,7 @@ export function fulfillmentModule(deps: ModuleDeps): FulfillmentModuleImpl {
 
   return {
     async pick(payload) {
-      const order = await requireOrder(payload.orderId);
+      await requireOrder(payload.orderId);
       await repos.orders.update(payload.orderId, { status: 'processing', subStatus: 'picking', updatedAt: now() });
       return { orderId: payload.orderId, status: 'picked', warehouseId: payload.warehouseId, pickerId: payload.pickerId, updatedAt: now() };
     },
@@ -70,14 +70,13 @@ export function fulfillmentModule(deps: ModuleDeps): FulfillmentModuleImpl {
         trackingNumber: payload.trackingNumber,
         courier: payload.courier,
       });
-      const shipment: Shipment = {
+const shipment: Shipment = {
         id: `ship-${payload.orderId}`,
         orderId: payload.orderId,
         courier: payload.courier as CourierCode,
         service: payload.service,
         trackingNumber: payload.trackingNumber,
-        trackingUrl: payload.awbUrl,
-        events: [{ status: 'pending', description: 'Paket diserahkan ke kurir', occurredAt: now() }],
+        events: [{ status: 'pending', description: 'Dikirim', occurredAt: now() }],
         status: 'pending',
         createdAt: now(),
         updatedAt: now(),

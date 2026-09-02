@@ -39,7 +39,7 @@ export async function runMigrations(url: string, options: MigrateOptions = {}): 
         console.log(`migrated ${file}`);
       } catch (err) {
         await client.query('ROLLBACK');
-        throw new Error(`Migration ${file} gagal: ${(err as Error).message}`);
+        throw new Error(`Migration ${file} gagal: ${(err as Error).message}`, { cause: err });
       } finally {
         client.release();
       }

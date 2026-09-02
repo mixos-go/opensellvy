@@ -26,7 +26,12 @@
     "pg": "^8.13.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.10"
+    "@types/pg": "^8.11.10",
+    "@opensellvy/module": "workspace:*",
+    "@opensellvy/connector": "workspace:*",
+    "@opensellvy/db-pg": "workspace:*",
+    "@opensellvy/platform-local": "workspace:*",
+    "tsx": "^4.19.2"
   },
   "license": "MIT"
 }

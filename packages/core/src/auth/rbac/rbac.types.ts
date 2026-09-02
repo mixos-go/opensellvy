@@ -22,8 +22,17 @@ export interface RoleDefinition {
   permissions: PermissionCode[];
 }
 
+/**
+ * Resolve daftar role yang dimiliki seorang user dalam konteks store.
+ * Return undefined bila user tidak terdefinisi → dianggap tanpa akses.
+ */
+export type RoleResolver = (
+  userId: ID,
+  context?: { storeId?: ID },
+) => Promise<string[] | undefined>;
+
 export interface RbacService {
   can(userId: ID, permission: PermissionCode, context?: { storeId?: ID }): Promise<boolean>;
-  hasRole(userId: ID, role: string): Promise<boolean>;
+  hasRole(userId: ID, role: string, context?: { storeId?: ID }): Promise<boolean>;
   assert(userId: ID, permission: PermissionCode, context?: { storeId?: ID }): Promise<void>;
 }

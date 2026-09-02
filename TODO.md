@@ -98,6 +98,8 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
 - Tests battle: finance/analytics/returns/fulfillment/promotion/payment/user+audit/
 shipping/catalog/updateStatus-edges (module 33), connector 10, api 10, platform-local 4,
        db-pg 3, opensellvy 2, core 42 = **104 test hijau**, typecheck & build 14/14, demo:local jalan.
+       - **Status kini**: core 50, connector 10, platform-shopee 25, module 33, platform-local 4,
+         api 10, db-pg 15, opensellvy 2 = **149 test hijau**; typecheck/lint/build 14/14; `pnpm check` 0.
       - core/auth: JWT HS256 (sign/verify, issuer/audience/maxAge), password scrypt, AuthService
         login/refresh(rotation)/logout/logoutAll/verifyToken, session store (hash token, revoke),
         fail-closed & anti-lockout (INVALID_CREDENTIALS tak bocorkan email/password); + tests 13.
@@ -106,8 +108,14 @@ shipping/catalog/updateStatus-edges (module 33), connector 10, api 10, platform-
       - db-pg: `createPgRefreshSessionStore` + `createPgAuthDeps` (findAuthUserByEmail + getMemberRole +
         sessions) → `createAuthService` e2e di Postgres nyata (login/verify/rotation/logout, hash token
         tak tersimpan raw); migration 00007; + tests 1 (db-pg 3).
-  7. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
- 8. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
+   7. `[x]` **Shopee adapter (full)**: clean-room implementasi Open Platform v2 — HMAC-SHA256 sign
+      (Public: partner_id+path+timestamp; Shop: +access_token+shop_id), baseUrl fleksibel per region
+      (default partner.shopeemobile.com), OAuth authorize/exchange/refresh, pull order/product,
+      ship/update status, inventory sync (update_stock), return manage, webhook verify+map, mapper
+      payload↔domain. Evolusi contract: `PlatformAuth` kini terima `context` (getAuthorizeUrl/exchangeCode
+      butuh credentials utk redirectUri/shopId). + tests 25 (signing, HTTP layer, auth, mapper, gateway
+      via stub fetch).
+  8. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
 
 ---
 
@@ -144,18 +152,24 @@ ke registry. Module & API tak pernah import platform-* langsung.
       allow overwrite via `{ replace: true }`; + tests 5.
     - Token refresh-on-expiry: `PlatformAuth.refreshToken(context)` kini return `OAuthToken` baru;
       `channelContext` lazy-refresh & persist saat `expiresAt` mendekati kedaluwarsa (margin 60s); + test.
+    - `PlatformAuth` (getAuthorizeUrl/exchangeCode/refreshToken) kini terima `context: ConnectorContext`
+      — dibutuhkan adapter nyata (redirectUri & shopId dari credentials). Implementasi stub/test disesuaikan;
+      `PlatformCredentials` + `OAuthConfiguration` dapat `baseUrl?`; SDK `PlatformConfig` + `defaultCredentials`
+      meneruskan `baseUrl?`/`shopId?`.
     - Umbrella SDK `OpenSellvy` → `await sdk.open()`, inject repository (Postgres via `config.databaseUrl`,
       fallback in-memory); fix wiring `repos`/`repositories`; + tests.
     - OAuth ergonomi: `createOAuthClient` (RFC6749 authorize/exchange/refresh) + `createMemoryTokenStore`; + tests.
 
 ### 4.1 Shopee
-`[ ]` Study API docs (Open Platform)
-`[ ]` OAuth flow (partner_id, sign, authorize URL)
-`[ ]` HTTP client + signature (HMAC-SHA256)
-`[ ]` Order sync (get_order_list, get_order_detail)
-`[ ]` Product push
-`[ ]` Inventory sync
-`[ ]` Webhook receiver
+`[x]` Study API docs (Open Platform) + konfirmasi tipe signing (Public vs Shop) & baseUrl per region
+`[x]` OAuth flow (partner_id, sign public, authorize URL auth_partner, token/get, access_token/get)
+`[x]` HTTP client + signature (HMAC-SHA256; base string partner_id+path+timestamp[+access_token+shop_id])
+`[x]` Order sync (get_order_list, get_order_detail) + ship_order + update_order_status
+`[x]` Product pull/push (get_item_list/detail, add_item/update_item)
+`[x]` Inventory sync (product/update_stock)
+`[x]` Return manage (returns confirm/refund)
+`[x]` Webhook receiver (verify via HMAC + map event → domain)
+`[ ]` Kredensial sandbox nyata utk integrasi e2e (kini stub fetch di test)
 
 ### 4.2 TikTok Shop / Tokopedia
 `[ ]` Study API docs (TTS + Tokopedia: merged platform)

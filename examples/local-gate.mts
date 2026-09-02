@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     },
     { tokens: memoryTokenStore() },
   );
-  const modules = sdk.modules;
+  const modules = await sdk.open();
 
   console.log('== 1. Buat store & konek channel local (OAuth) ==');
   await modules.stores.create({ name: 'Toko Demo', slug: 'toko-demo' });

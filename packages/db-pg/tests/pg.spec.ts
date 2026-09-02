@@ -66,7 +66,7 @@ const dummy: PlatformPlugin = {
   auth: {
     getAuthorizeUrl: () => Promise.resolve('http://local/authorize'),
     exchangeCode: () => Promise.resolve({ accessToken: 't', expiresAt: Date.now() + 60_000 }),
-    refreshToken: () => Promise.resolve(),
+    refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {
     getShop: () => Promise.resolve({ platformShopId: 'shop-local', shopName: 'Local Shop', marketplace: 'local' }),

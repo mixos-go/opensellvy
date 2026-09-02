@@ -73,11 +73,30 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
      aggregate domain utuh (source of truth). FK via colom → solusi multi-tenant/analitik.
    - Lifecycle nyata di Postgres 18 (instal lokal): 2 integration test → `pnpm --filter @opensellvy/db-pg test`
      (store→connect→sync idempoten→fulfill→analytics ; product+inventory→guard stok negatif).
-   - Fix `orderChanged` di module: deep-equal canonical (urutan kunci JSON tak relevan
+- Fix `orderChanged` di module: deep-equal canonical (urutan kunci JSON tak relevan
      lagi antar backend memory vs JSONB) — idempotensi konsisten backend-agnostic.
    - Catatan runtime: test butuh `opensellvy` role CREATEDB + `opensellvy_pg_test` DB dibikin otomatis.
- 6. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
-7. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
+   - Seed nyata: `db:seed` (tsx scripts/seed.ts) → bootstrap merchant lokal di Postgres
+     (store → warehouse default → 4 produk + stok → customer → connect channel local →
+     orders sync). Perlu `DATABASE_URL`. Jalan: 2 order sync.
+  6. `[x]` **Battle-test package utk local seller** (sebelum platform) — implementasi stub → nyata:
+     - Hapus 16 facade dead (interface duplikat unreachable) + 18 file 0-byte; `module/src` = impl/ports.
+     - finance.reconcile: hitung gross/net/refund dari `orders.find` → settlement `in_transit` + event.
+     - analytics: `getSalesSummary` (memory) & `avgFulfillmentHours` (shippedAt - createdAt) nyata;
+       refunded/cancellation konsisten (returned tetap gross, dikurangi refund).
+     - shipping: default `CourierRateProvider` (tarif flat base + per-kg per courier) tanpa inject.
+     - connector: `createOAuthClient` (RFC6749 authorize/exchange/refresh via core HttpClient)
+       + `createMemoryTokenStore`; + tests 5.
+     - platform-local: `manageReturn` handle action (`applyReturnAction`: approve/reject/receive/refund
+       → status return + order `returned` saat receive/refund).
+     - API (Hono): auth **fail-closed default** (`authMode:'open'` utk dev eksplisit),
+       webhook dispatch via `onWebhook`, route products/inventory/channels + OAuth callback;
+       + tests 9.
+     - Tests battle: finance/analytics/returns/fulfillment/promotion/payment/user+audit/
+       shipping/catalog/updateStatus-edges (module 33), connector 10, api 9, platform-local 4,
+       db-pg 2, opensellvy 2, core 19 = **79 test hijau**, typecheck & build 14/14, demo:local jalan.
+  7. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
+ 8. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
 
 ---
 
@@ -96,10 +115,10 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
 
 ## 3. Database
 
-- `[ ]` Decide Drizzle vs Prisma vs Kysely
-- `[ ]` Complete schema: stores, users, platform_accounts, orders, products, customers, inventory, shipments, finance
-- `[ ]` Migration runner
-- `[ ]` Seed script
+- `[x]` Decide Drizzle ORM (query-layer tipis) + raw SQL DDL (clean-room, tanpa drizzle-kit)
+- `[x]` Complete schema: stores, users, platform_accounts, orders, products, customers, inventory, shipments, finance
+- `[x]` Migration runner (folder `migrations/`, tabel `schema_migrations`, urut + transaksi)
+- `[x]` Seed script (`db:seed`, tsx → bootstrap merchant lokal di Postgres)
 
 ---
 
@@ -115,6 +134,7 @@ ke registry. Module & API tak pernah import platform-* langsung.
       `channelContext` lazy-refresh & persist saat `expiresAt` mendekati kedaluwarsa (margin 60s); + test.
     - Umbrella SDK `OpenSellvy` → `await sdk.open()`, inject repository (Postgres via `config.databaseUrl`,
       fallback in-memory); fix wiring `repos`/`repositories`; + tests.
+    - OAuth ergonomi: `createOAuthClient` (RFC6749 authorize/exchange/refresh) + `createMemoryTokenStore`; + tests.
 
 ### 4.1 Shopee
 `[ ]` Study API docs (Open Platform)
@@ -150,24 +170,26 @@ ke registry. Module & API tak pernah import platform-* langsung.
 
 ## 5. Modules (18 domains)
 
-`[ ]` product — unified product, variant, channel listing
-`[ ]` catalog — category & attribute mapping
-`[ ]` inventory — stock management & sync to channels
-`[ ]` order — omnichannel order, status, mapper
-`[ ]` fulfillment — pick-pack-ship workflow
-`[ ]` shipping — multi-courier (JNE, J&T, SiCepat, Anteraja, Grab)
-`[ ]` payment — gateway (Midtrans, Xendit, DOKU)
-`[ ]` customer — unified customer, merge, history
-`[ ]` return — return & refund flow
-`[ ]` warehouse — multi-warehouse
-`[ ]` finance — invoice, settlement, reconciliation
-`[ ]` promotion — voucher, flash sale, bundle
-`[ ]` notification — email/WA/SMS/push + templates
-`[ ]` analytics — sales, product, channel report
-`[ ]` user — staff management
-`[ ]` store — multi-store management
-`[ ]` channel — channel connect/sync/mapping
-`[ ]` audit — audit trail & logging
+`[x]` product — unified product, variant, channel listing
+`[x]` catalog — category & attribute mapping (list = produk + stok tersedia)
+`[x]` inventory — stock management & sync to channels
+`[x]` order — omnichannel order, status machine & push-back DUA ARAH
+`[x]` fulfillment — pick-pack-ship workflow
+`[x]` shipping — multi-courier (JNE, J&T, SiCepat, Anteraja, Grab) + default flat rate
+`[x]` payment — capture/partial-refund/full-refund
+`[x]` customer — unified customer, history
+`[x]` return — return & refund flow + aksi platform
+`[x]` warehouse — multi-warehouse (default)
+`[x]` finance — settlement + rekonsiliasi (reconcile dari order scan)
+`[x]` promotion — voucher validation (percent/fixed/min-spend/max-discount)
+`[x]` notification — interface (+ event hooks)
+`[x]` analytics — sales summary, channel performance (avg fulfillment), top products
+`[x]` user — staff management (role: owner/admin/manager/operator/viewer)
+`[x]` store — multi-store management
+`[x]` channel — channel connect/sync/mapping (OAuth)
+`[x]` audit — audit trail & logging
+Catatan: semua punya battle-test di `packages/module/tests/` (33 test: finance/analytics/returns/
+fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 
 ---
 
@@ -175,11 +197,13 @@ ke registry. Module & API tak pernah import platform-* langsung.
 
 `[~]` Implemented (Hono, REST-first), in progress
    - `[x]` `@opensellvy/api` — Hono server (`@hono/node-server`), layering: Router → Controller → Service (module) → Repository
-   - `[x]` REST routes: health, stores CRUD-lite, orders list/detail/sync, webhook receiver per-platform
-   - `[x]` Middleware: cors, bearer auth (HMAC self-contained via `@opensellvy/core`), rate-limit (in-memory), error-handler
+   - `[x]` REST routes: health, stores CRUD-lite, orders list/detail/sync, products/inventory/channels, webhook receiver per-platform
+   - `[x]` Middleware: cors, bearer auth (HMAC self-contained via `@opensellvy/core`, **fail-closed default**; `authMode:'open'` utk dev), rate-limit (in-memory), error-handler
+   - `[x]` Webhook dispatch: controller verifikasi sig → `api.onWebhook({platform,event,type,data,signature})`
+   - `[x]` OAuth: `GET /api/stores/:storeId/oauth/:platform/authorize` + `POST /api/oauth/:platform/callback`
    - `[x]` `createServer(config, deps)` + `buildApp(ctx)`; controller tak pernah akses repo langsung
 `[ ]` GraphQL schema (baseline resolvers per module) — deferred
-`[ ]` OAuth callback endpoints — deferred (decision #8 open)
+`[ ]` Auth provider eksternal (decision #8 open) — bearer HMAC internal jalan dulu
 
 ---
 
@@ -197,7 +221,7 @@ ke registry. Module & API tak pernah import platform-* langsung.
 `[ ]` Getting started guide
 `[ ]` Per-platform connector docs
 `[ ]` API reference
-`[ ]` Unit tests
+`[~]` Unit tests — **79 test hijau** (core 19, connector 10, module 33, platform-local 4, api 9, db-pg 2, opensellvy 2)
 `[ ]` Integration tests (mock server per platform)
 `[ ]` CI (lint, typecheck, test, build)
 
@@ -209,7 +233,7 @@ ke registry. Module & API tak pernah import platform-* langsung.
 |---|---|---|---|
 |1| Platform API strategy | Official SDK / Community SDK / **Clean-room HTTP (decided)** | **DECIDED** |
 |2| Plugin packaging | **Monorepo packages/ (decided)** — `@opensellvy/platform-*` per connector | **DECIDED** |
-|3| ORM | Drizzle (recommended) / Prisma / Kysely | Open |
+|3| ORM | **Drizzle (decided, implemented)** — query-layer tipis; DDL raw SQL; tanpa drizzle-kit | **DECIDED** |
 |4| HTTP server | **Hono (decided, implemented)** / Fastify / Express | **DECIDED** |
 |5| GraphQL engine | Yoga (recommended) / Apollo | Open |
 |6| API structure | GraphQL main + REST webhooks (recommended) | Open |

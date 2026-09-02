@@ -20,8 +20,8 @@ export type Capability =
   | 'webhook.receive';
 
 export interface PlatformAuth {
-  getAuthorizeUrl(): Promise<string>;
-  exchangeCode(code: string): Promise<OAuthToken>;
+  getAuthorizeUrl(context: ConnectorContext): Promise<string>;
+  exchangeCode(context: ConnectorContext, code: string): Promise<OAuthToken>;
   /**
    * Perbarui access token dari refreshToken milik context.
    * Return token baru agar caller bisa mem-persist ke TokenStore.

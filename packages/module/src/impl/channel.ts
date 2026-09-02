@@ -1,6 +1,6 @@
 import type { ChannelConnection, ConnectChannelInput, ID, PlatformCode } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds, channelContext, requireToken } from './deps';
+import { buildIds, channelContext, requireCredentials, requireToken } from './deps';
 
 export interface ChannelModuleImpl {
   /** mulai OAuth — return authorize URL utk redirect UI */
@@ -26,9 +26,14 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
 
   return {
     async getAuthorizeUrl(storeId, platform) {
-      if (!deps.credentials) throw new Error('credentials provider belum dikonfigurasi');
+      const credentials = requireCredentials(deps);
       const plugin = registry.get(platform);
-      return plugin.auth.getAuthorizeUrl();
+      return plugin.auth.getAuthorizeUrl({
+        storeId,
+        platformAccountId: `${storeId}:${platform}`,
+        credentials: await credentials(storeId, platform),
+        token: { accessToken: '' },
+      });
     },
 
     async connect(input) {
@@ -36,13 +41,22 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
       const tokens = requireToken(deps);
       const credentials = deps.credentials;
       if (!credentials) throw new Error('credentials provider belum dikonfigurasi');
+      const credentialsResolved = await credentials(input.storeId, input.platform);
 
-      const token = await plugin.auth.exchangeCode(input.oauth.code);
+      const token = await plugin.auth.exchangeCode(
+        {
+          storeId: input.storeId,
+          platformAccountId: `${input.storeId}:${input.platform}`,
+          credentials: credentialsResolved,
+          token: { accessToken: '' },
+        },
+        input.oauth.code,
+      );
       const storeId = input.storeId;
       const context = {
         storeId,
         platformAccountId: `${storeId}:${input.platform}`,
-        credentials: await credentials(storeId, input.platform),
+        credentials: credentialsResolved,
         token,
       };
       const shop = await plugin.gateway.getShop(context);

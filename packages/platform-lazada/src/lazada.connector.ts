@@ -19,8 +19,8 @@ export const lazadaPlugin: PlatformPlugin = {
     'webhook.receive',
   ],
   auth: {
-    getAuthorizeUrl: () => Promise.resolve(''),
-    exchangeCode: () => Promise.resolve({ accessToken: '' }),
+    getAuthorizeUrl: (_ctx) => Promise.resolve(''),
+    exchangeCode: (_ctx, _code) => Promise.resolve({ accessToken: '' }),
     refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {

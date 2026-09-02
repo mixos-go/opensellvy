@@ -12,8 +12,8 @@ const dummy: PlatformPlugin = {
   baseUrl: 'https://example.com',
   capabilities: ['order.pull'],
   auth: {
-    getAuthorizeUrl: () => Promise.resolve(''),
-    exchangeCode: () => Promise.resolve({ accessToken: '' }),
+    getAuthorizeUrl: (_c) => Promise.resolve(''),
+    exchangeCode: (_c, _code) => Promise.resolve({ accessToken: '' }),
     refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {

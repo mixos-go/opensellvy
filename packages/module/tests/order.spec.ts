@@ -26,8 +26,8 @@ const dummy: PlatformPlugin = {
   baseUrl: 'memory://local',
   capabilities: ['order.pull', 'order.push', 'product.pull', 'product.push', 'inventory.sync'],
   auth: {
-    getAuthorizeUrl: () => Promise.resolve('http://local/authorize'),
-    exchangeCode: () => Promise.resolve(token),
+    getAuthorizeUrl: (_c) => Promise.resolve('http://local/authorize'),
+    exchangeCode: (_c, _code) => Promise.resolve(token),
     refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {

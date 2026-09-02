@@ -99,6 +99,8 @@ export class OpenSellvy {
         secret: pc.secret,
         redirectUri: pc.redirectUri,
         ...(pc.sandbox !== undefined ? { sandbox: pc.sandbox } : {}),
+        ...(pc.baseUrl !== undefined ? { baseUrl: pc.baseUrl } : {}),
+        ...(pc.shopId !== undefined ? { shopId: pc.shopId } : {}),
       };
     };
   }

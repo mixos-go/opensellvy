@@ -29,8 +29,8 @@ export function dummyPlugin(hooks: LocalPluginHooks = {}): PlatformPlugin {
     baseUrl: 'memory://local',
     capabilities: ['order.pull', 'order.push', 'product.pull', 'product.push', 'inventory.sync', 'return.manage'],
     auth: {
-      getAuthorizeUrl: () => Promise.resolve('memory://local/authorize'),
-      exchangeCode: () => Promise.resolve(token),
+      getAuthorizeUrl: (_c) => Promise.resolve('memory://local/authorize'),
+      exchangeCode: (_c, _code) => Promise.resolve(token),
       refreshToken: () => Promise.resolve({ accessToken: 't2', refreshToken: 'r2', expiresAt: Date.now() + 60_000 }),
     },
     gateway: {

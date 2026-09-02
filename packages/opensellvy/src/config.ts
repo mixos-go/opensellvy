@@ -11,6 +11,10 @@ export interface PlatformConfig {
   secret: string;
   sandbox?: boolean;
   redirectUri: string;
+  /** base URL eksplisit platform (sandbox/production/region) — lihat PlatformCredentials.baseUrl. */
+  baseUrl?: string;
+  /** shop id di sisi platform (mis. shop_id Shopee) — lihat PlatformCredentials.shopId. */
+  shopId?: string;
   extra?: Record<string, unknown>;
 }
 

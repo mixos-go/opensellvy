@@ -209,6 +209,9 @@ importers:
       '@opensellvy/connector':
         specifier: workspace:*
         version: link:../connector
+      '@opensellvy/core':
+        specifier: workspace:^
+        version: link:../core
       '@opensellvy/types':
         specifier: workspace:*
         version: link:../types

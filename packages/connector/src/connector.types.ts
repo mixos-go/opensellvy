@@ -5,6 +5,8 @@ export interface OAuthConfiguration {
   tokenUrl: string;
   scopes: string[];
   sandbox?: boolean;
+  /** base URL token/authorize endpoint eksplisit (regional/sandbox). */
+  baseUrl?: string;
 }
 
 export interface OAuthToken {
@@ -16,9 +18,24 @@ export interface OAuthToken {
 
 export interface PlatformCredentials {
   appId: string;
+  /** partner_key (secret) untuk platform yang pakai HMAC signing (mis. Shopee). */
   secret: string;
   redirectUri: string;
   sandbox?: boolean;
+  /**
+   * Base URL eksplisit platform — FLEXIBLE karena tiap platform punya banyak
+   * endpoint (sandbox vs production, dan bervariasi per region/kredensial).
+   * Contoh Shopee: https://partner.shopeemobile.com (live SG),
+   * https://openplatform.sandbox.test-stable.shopee.sg (sandbox), dst.
+   * Jika tidak diisi, adapter memakai default-nya sendiri.
+   */
+  baseUrl?: string;
+  /**
+   * Shop/platform identifier di sisi platform (mis. shop_id Shopee) —
+   * dipakai untuk signing & param shop-level API. Berbeda dari
+   * `ConnectorContext.platformAccountId` (ID internal kita).
+   */
+  shopId?: string;
 }
 
 export interface ConnectorContext {

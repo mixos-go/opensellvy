@@ -234,6 +234,9 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 `[ ]` Per-platform connector docs
 `[ ]` API reference
 `[~]` Unit tests — **104 test hijau** (core 42, connector 10, module 33, platform-local 4, api 10, db-pg 3, opensellvy 2)
+`[x]` Quality gates: ESLint flat config (typescript-eslint) → `pnpm -r lint` hijau semua paket;
+  TS strict penuh (`noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`) → typecheck hijau;
+  `pnpm check` = typecheck + lint + build + test satu perintah.
 `[ ]` Integration tests (mock server per platform)
 `[ ]` CI (lint, typecheck, test, build)
 

@@ -90,8 +90,8 @@ export function createLocalPlugin(options: LocalPluginOptions = {}): PlatformPlu
         }
         return Promise.resolve();
       },
-      manageReturn: (context, request, _action) => {
-        store.setReturn({ ...request });
+      manageReturn: (context, request, action) => {
+        store.applyReturnAction(context.storeId, request, action);
         return Promise.resolve();
       },
     },

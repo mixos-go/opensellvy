@@ -1,8 +1,12 @@
 import type {
+  ID,
   ReturnRequest,
   UnifiedOrder,
   UnifiedProduct,
 } from '@opensellvy/types';
+
+/** aksi return (selaras ReturnAction di @opensellvy/connector, tanpa import lintas-layer). */
+export type LocalReturnAction = 'approve' | 'reject' | 'receive' | 'refund';
 
 export interface LocalShopProfile {
   platformShopId: string;
@@ -87,6 +91,11 @@ export class LocalStore {
     return this.orders.get(this.key(storeId, platformOrderId));
   }
 
+  /** cari order by id internal ATAU platformOrderId — dipakai flow return. */
+  getOrderById(storeId: string, orderId: ID): UnifiedOrder | undefined {
+    return this.listOrders(storeId).find((o) => o.id === orderId || o.platformOrderId === orderId);
+  }
+
   saveOrder(order: UnifiedOrder): void {
     this.orders.set(this.key(order.storeId, order.platformOrderId), order);
   }
@@ -120,6 +129,29 @@ export class LocalStore {
 
   setReturn(request: ReturnRequest): void {
     this.returns.set(request.id, request);
+  }
+
+  /** terapkan aksi return (approve/reject/receive/refund) → simpan status + dampak ke order. */
+  applyReturnAction(storeId: string, request: ReturnRequest, action: LocalReturnAction): ReturnRequest {
+    const statusByAction: Record<LocalReturnAction, ReturnRequest['status']> = {
+      approve: 'approved',
+      reject: 'rejected',
+      receive: 'received',
+      refund: 'refunded',
+    };
+    const updated: ReturnRequest = { ...request, status: statusByAction[action], updatedAt: new Date().toISOString() };
+    this.setReturn(updated);
+    if (action === 'receive' || action === 'refund') {
+      const order = this.getOrderById(storeId, request.orderId);
+      if (order) {
+        this.applyOrderPatch(order.storeId, order.platformOrderId, { status: 'returned' });
+      }
+    }
+    return updated;
+  }
+
+  getReturn(id: string): ReturnRequest | undefined {
+    return this.returns.get(id);
   }
 
   listReturns(): ReturnRequest[] {

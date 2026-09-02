@@ -111,4 +111,35 @@ describe('one-gate end-to-end dengan adapter LOCAL (tanpa platform API)', () => 
     const mapped = await plugin.webhook.map('order.status', { id: 'x' });
     expect(mapped).toEqual({ type: 'order.status', data: { id: 'x' } });
   });
+
+  it('return refund → order lokal menjadi returned & return tersimpan di marketplace', async () => {
+    store.createOrder('store-1', {
+      customer: { id: 'c1', customerName: 'Budi' },
+      lines: [
+        { id: 'l1', productId: 'p1', sku: 'SKU-1', name: 'Produk A', quantity: 1, unitPrice: { amount: 50_000, currency: 'IDR' }, total: { amount: 50_000, currency: 'IDR' } },
+      ],
+      status: 'paid',
+    });
+    await services.stores.create({ name: 'Toko Demo', slug: 'demo-2' });
+    const channel = await services.channels.connect({ storeId: 'store-1', platform: 'local', oauth: { code: 'r' } });
+    await services.orders.sync('store-1');
+
+    const [order] = (await services.orders.list({ storeId: 'store-1' })).items;
+    const request = await services.returns.create({
+      orderId: order.id,
+      channelId: channel.id,
+      lines: [{ orderLineId: order.lines[0].id, sku: order.lines[0].sku, quantity: 1 }],
+      reason: 'defective',
+      note: 'screening retak',
+    });
+
+    await services.returns.notifyPlatform(request.id, 'store-1', 'refund');
+
+    expect(store.getReturn(request.id)?.status).toBe('refunded');
+    expect(store.getOrder('store-1', order.platformOrderId)?.status).toBe('returned');
+
+    const rejected = await store.applyReturnAction('store-1', store.getReturn(request.id)!, 'reject');
+    expect(rejected.status).toBe('rejected');
+    expect(store.getOrder('store-1', order.platformOrderId)?.status).toBe('returned');
+  });
 });

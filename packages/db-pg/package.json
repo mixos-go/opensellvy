@@ -1,7 +1,7 @@
 {
-  "name": "@opensellvy/db",
+  "name": "@opensellvy/db-pg",
   "version": "0.0.1",
-  "description": "Database schema & migrations (PostgreSQL)",
+  "description": "Postgres repository adapter (@opensellvy/module ports) via Drizzle query builder + raw SQL migrations",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,21 +11,22 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist", "migrations"],
+  "files": ["dist"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@opensellvy/types": "workspace:*",
+    "@opensellvy/module": "workspace:*",
+    "@opensellvy/db": "workspace:*",
     "drizzle-orm": "^0.43.1",
     "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@opensellvy/connector": "workspace:*",
     "@types/pg": "^8.11.10"
   },
   "license": "MIT"

@@ -17,15 +17,26 @@ const ACTION_TO_STATUS: Record<OrderStatusUpdate['action'], OrderStatus> = {
   return: 'returned',
 };
 
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function orderChanged(a: UnifiedOrder, b: UnifiedOrder): boolean {
   const pick = (o: UnifiedOrder) =>
-    JSON.stringify({
+    canonical({
       status: o.status,
       lines: o.lines,
       totals: o.totals,
-      courier: o.shipping.courier,
-      service: o.shipping.service,
-      trackingNumber: o.shipping.trackingNumber,
+      courier: o.shipping?.courier,
+      service: o.shipping?.service,
+      trackingNumber: o.shipping?.trackingNumber,
       raw: o.raw,
     });
   return pick(a) !== pick(b);

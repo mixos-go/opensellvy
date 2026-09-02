@@ -1,12 +1,13 @@
-async function migrate(): Promise<void> {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error('DATABASE_URL is not set');
-  }
-  console.log(`Migrations not yet implemented. DATABASE_URL=${url}`);
+import { runMigrations } from '../src/migrations.js';
+
+const url = process.env.DATABASE_URL;
+if (!url) {
+  throw new Error('DATABASE_URL is not set');
 }
 
-migrate().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+runMigrations(url)
+  .then(() => console.log('migrations selesai'))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

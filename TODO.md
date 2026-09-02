@@ -59,8 +59,24 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
    gateway.updateOrder) → product push → inventory sync → stok terlihat platform.
    Buat SDK tidak berbeda dengan adapter nyata — order/webhook/token sama.
    Demo: `pnpm demo:local` (examples/local-gate.mts) — module OMS tak pernah tahu adapter mana.
-5. `[ ]` **Adapt schema DB ke domain** (bukan ke payload platform).
-6. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
+ 5. `[x]` **Adapt schema DB ke domain** (bukan ke payload platform).
+   - ORM diputuskan: **Drizzle** sebagai query-layer tipis + **raw SQL** untuk DDL
+     (clean-room: drizzle-orm tanpa drizzle-kit/codegen; migration tetap *.sql),
+     runtime pool `pg`. ENV `DATABASE_URL`.
+   - `@opensellvy/db`: schema Drizzle (21 tabel) + `runMigrations()` (folder `migrations/`,
+     tabel `schema_migrations`, urut + transaksi per file). SQL runner: `pnpm --filter @opensellvy/db db:migrate`.
+   - Migrasi baru: `00005_domain_tables.sql` (channels/products/inventory+customer/warehouse/
+     return/payment/settlement/promotion/shipment/notification/audit),
+     `00006_order_payload.sql` (orders += channel_id, payload, paid_at).
+   - `@opensellvy/db-pg` (BARU): `createPostgresRepositories(db)` → mengimplementasikan
+     ke-17 repository port `@opensellvy/module`. Pola: kolom queryable + `payload` JSONB =
+     aggregate domain utuh (source of truth). FK via colom → solusi multi-tenant/analitik.
+   - Lifecycle nyata di Postgres 18 (instal lokal): 2 integration test → `pnpm --filter @opensellvy/db-pg test`
+     (store→connect→sync idempoten→fulfill→analytics ; product+inventory→guard stok negatif).
+   - Fix `orderChanged` di module: deep-equal canonical (urutan kunci JSON tak relevan
+     lagi antar backend memory vs JSONB) — idempotensi konsisten backend-agnostic.
+   - Catatan runtime: test butuh `opensellvy` role CREATEDB + `opensellvy_pg_test` DB dibikin otomatis.
+ 6. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
 7. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
 
 ---

@@ -84,11 +84,12 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
 ## 2. Core
 
 - `[ ]` Auth (JWT, session, refresh token)
-- `[ ]` RBAC (role definitions done, perlu user-store binding)
-- `[ ]` Crypto (token encryption utk platform credentials)
-- `[ ]` Logger
-- `[ ]` Event bus
-- `[ ]` Cache
+- `[x]` RBAC (identity-aware: `can(userId, perm, {storeId})` resolve role via injected `RoleResolver`, fail-closed tanpa resolver; + tests)
+- `[x]` Crypto (AES-256-GCM token encryption, HMAC-SHA256, sha256/randomHex; + tests)
+- `[x]` Logger (console, zero-dep)
+- `[x]` Event bus (in-process; + tests)
+- `[x]` HTTP client (fetch, retry/backoff, hooks, JSON; + tests)
+- `[ ]` Cache (interface only — impl open)
 - `[ ]` Queue (bullmq)
 
 ---
@@ -108,6 +109,12 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
 `[x]` DECISION: **Plugin monorepo** — tiap platform = package `@opensellvy/platform-*`, didaftarkan
 ke registry. Module & API tak pernah import platform-* langsung.
 `[x]` Connector contract (`PlatformPlugin`: capabilities, auth, gateway, webhook) + registry
+    - Registry satu-gate: `registerPlatform` melempar `RegisterError` pada duplicate (anti silent-overwrite);
+      allow overwrite via `{ replace: true }`; + tests 5.
+    - Token refresh-on-expiry: `PlatformAuth.refreshToken(context)` kini return `OAuthToken` baru;
+      `channelContext` lazy-refresh & persist saat `expiresAt` mendekati kedaluwarsa (margin 60s); + test.
+    - Umbrella SDK `OpenSellvy` → `await sdk.open()`, inject repository (Postgres via `config.databaseUrl`,
+      fallback in-memory); fix wiring `repos`/`repositories`; + tests.
 
 ### 4.1 Shopee
 `[ ]` Study API docs (Open Platform)
@@ -166,15 +173,17 @@ ke registry. Module & API tak pernah import platform-* langsung.
 
 ## 6. API Layer
 
-`[ ]` GraphQL schema (baseline resolvers per module)
-`[ ]` GraphQL context (auth, db, tenant isolation)
-`[ ]` REST webhooks (per platform callback receiver)
-`[ ]` OAuth callback endpoints
-`[ ]` Middleware (auth, rate-limit, cors, error-handler)
+`[~]` Implemented (Hono, REST-first), in progress
+   - `[x]` `@opensellvy/api` — Hono server (`@hono/node-server`), layering: Router → Controller → Service (module) → Repository
+   - `[x]` REST routes: health, stores CRUD-lite, orders list/detail/sync, webhook receiver per-platform
+   - `[x]` Middleware: cors, bearer auth (HMAC self-contained via `@opensellvy/core`), rate-limit (in-memory), error-handler
+   - `[x]` `createServer(config, deps)` + `buildApp(ctx)`; controller tak pernah akses repo langsung
+`[ ]` GraphQL schema (baseline resolvers per module) — deferred
+`[ ]` OAuth callback endpoints — deferred (decision #8 open)
 
 ---
 
-## 7. UI (optional)
+## 7. UI (optional — fase akhir setelah platform stabil)
 
 `[ ]` Components (DataTable, OrderStatusBadge, PlatformIcon)
 `[ ]` Hooks (useOrder, useProduct)
@@ -201,7 +210,7 @@ ke registry. Module & API tak pernah import platform-* langsung.
 |1| Platform API strategy | Official SDK / Community SDK / **Clean-room HTTP (decided)** | **DECIDED** |
 |2| Plugin packaging | **Monorepo packages/ (decided)** — `@opensellvy/platform-*` per connector | **DECIDED** |
 |3| ORM | Drizzle (recommended) / Prisma / Kysely | Open |
-|4| HTTP server | Hono (recommended) / Fastify / Express | Open |
+|4| HTTP server | **Hono (decided, implemented)** / Fastify / Express | **DECIDED** |
 |5| GraphQL engine | Yoga (recommended) / Apollo | Open |
 |6| API structure | GraphQL main + REST webhooks (recommended) | Open |
 |7| Monitoring | Sentry / OpenTelemetry / later | Open |

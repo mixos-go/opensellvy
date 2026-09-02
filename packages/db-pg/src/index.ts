@@ -23,10 +23,18 @@ import type {
   Paginated,
 } from '@opensellvy/types';
 import type { Repositories } from '@opensellvy/module';
+import type {
+  AuthDeps,
+  AuthUserRecord,
+  RefreshSession,
+  RefreshSessionStore,
+  RoleCode,
+} from '@opensellvy/core';
 import {
   stores,
   users,
   storeMembers,
+  refreshTokens,
   channels,
   orders,
   products,
@@ -810,6 +818,110 @@ function mapUser(r: { id: string; email: string; name: string; status: string; c
 
 export function createPostgresRepositories(db: DB): Repositories {
   return new PostgresRepositories(db).asRepositories;
+}
+
+/**
+ * Refresh session store di Postgres (contract core/auth).
+ * Hard-delete pada revoke; revisi hak entri dengan token_hash sama utk idempotensi.
+ */
+export function createPgRefreshSessionStore(db: DB): RefreshSessionStore {
+  return {
+    async save(session: RefreshSession) {
+      await db.insert(refreshTokens).values({
+        id: session.id,
+        userId: session.userId,
+        email: session.email,
+        storeId: session.storeId ?? null,
+        role: session.role,
+        tokenHash: session.tokenHash,
+        expiresAt: new Date(session.expiresAt),
+        revoked: false,
+      }).onConflictDoUpdate({
+        target: refreshTokens.tokenHash,
+        set: {
+          id: session.id,
+          email: session.email,
+          storeId: session.storeId ?? null,
+          role: session.role,
+          expiresAt: new Date(session.expiresAt),
+          revoked: false,
+        },
+      });
+    },
+    async findByTokenHash(tokenHash) {
+      const rows = await db.select().from(refreshTokens)
+        .where(and(eq(refreshTokens.tokenHash, tokenHash), eq(refreshTokens.revoked, false)))
+        .limit(1);
+      const r = rows[0];
+      if (!r) return undefined;
+      return mapRefreshSession(r);
+    },
+    async deleteById(sessionId) {
+      await db.delete(refreshTokens).where(eq(refreshTokens.id, sessionId));
+    },
+    async revokeAllForUser(userId) {
+      await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+    },
+  };
+}
+
+/** Deps lengkap untuk `createAuthService` dari core: credential lookup + membership + session store. */
+export function createPgAuthDeps(
+  db: DB,
+  jwtSecret: string,
+  opts?: { issuer?: string; audience?: string; accessTokenTtlSeconds?: number; refreshTokenTtlSeconds?: number },
+): AuthDeps {
+  return {
+    ...opts,
+    jwtSecret,
+    findUserByEmail: findAuthUserByEmail(db),
+    getMemberRole: async (storeId, userId) => {
+      const rows = await db.select().from(storeMembers)
+        .where(and(eq(storeMembers.storeId, storeId), eq(storeMembers.userId, userId)))
+        .limit(1);
+      const row = rows[0];
+      if (!row || row.status !== 'active') return undefined;
+      return row.role as RoleCode;
+    },
+    sessions: createPgRefreshSessionStore(db),
+  };
+}
+
+function findAuthUserByEmail(db: DB): (email: string) => Promise<AuthUserRecord | undefined> {
+  return async (email) => {
+    const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const r = rows[0];
+    if (!r) return undefined;
+    return {
+      id: r.id,
+      email: r.email,
+      name: r.name,
+      passwordHash: r.passwordHash,
+      status: r.status as 'active' | 'suspended',
+    };
+  };
+}
+
+function mapRefreshSession(r: {
+  id: string;
+  userId: string;
+  email: string;
+  storeId: string | null;
+  role: string;
+  expiresAt: Date;
+  createdAt: Date;
+  tokenHash: string;
+}): RefreshSession {
+  return {
+    id: r.id,
+    userId: r.userId,
+    email: r.email,
+    storeId: r.storeId ?? undefined,
+    role: r.role as RoleCode,
+    createdAt: r.createdAt.toISOString(),
+    expiresAt: r.expiresAt.toISOString(),
+    tokenHash: r.tokenHash,
+  };
 }
 
 export { schema };

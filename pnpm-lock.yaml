@@ -99,6 +99,9 @@ importers:
 
   packages/db-pg:
     dependencies:
+      '@opensellvy/core':
+        specifier: workspace:*
+        version: link:../core
       '@opensellvy/db':
         specifier: workspace:*
         version: link:../db

@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { createPostgresRepositories } from '../src';
-import { schema } from '@opensellvy/db';
+import { createPgAuthDeps, createPostgresRepositories } from '../src';
+import { users, storeMembers, schema } from '@opensellvy/db';
+import { createAuthService, hashPassword } from '@opensellvy/core';
 import { runMigrations } from '@opensellvy/db';
 import { connectors, registerPlatform } from '@opensellvy/connector';
 import type { PlatformPlugin, TokenStore } from '@opensellvy/connector';
@@ -14,6 +16,7 @@ const URL = process.env.DATABASE_URL ?? 'postgres://opensellvy:opensellvy@127.0.
 const TEST_DB = URL.replace(/\/[^/]+$/, '/opensellvy_pg_test');
 
 let pool: Pool;
+let db: NodePgDatabase<typeof schema>;
 let services: Services;
 
 function memoryTokenStore(): TokenStore {
@@ -90,7 +93,7 @@ describe('demobean-pg: lifecycle penuh di Postgres nyata', () => {
   beforeAll(async () => {
     await dropAndMigrate();
     pool = new Pool({ connectionString: TEST_DB });
-    const db = drizzle(pool, { schema });
+    db = drizzle(pool, { schema });
     const repos = createPostgresRepositories(db);
     services = createServices({
       deps: { registry: connectors, tokens: memoryTokenStore(), credentials: async () => ({ appId: 'a', secret: 's', redirectUri: 'http://cb' }) },
@@ -165,5 +168,60 @@ describe('demobean-pg: lifecycle penuh di Postgres nyata', () => {
     await services.inventory.adjust({ productId: product.id, sku: 'SKU-PG', warehouseId: 'wh-pg', quantity: -100, reason: 'oversell' })
       .then(() => expect.fail('harus menolak'))
       .catch((e) => expect(String(e)).toContain('Stock tidak cukup'));
+  });
+
+  it('core/auth end-to-end di Postgres: login → verify → refresh rotation → logout/revoke', async () => {
+    const auth = createAuthService(createPgAuthDeps(db, 'pg-test-secret', { issuer: 'opensellvy', audience: 'panel' }));
+    const store = await services.stores.create({ name: 'Toko Auth PG', slug: 'toko-auth-pg', config: {} });
+    const passwordHash = await hashPassword('ini-rahasia');
+
+    await db.insert(users).values({
+      id: 'pg-user-1',
+      email: 'seller@warung.id',
+      name: 'Seller PG',
+      passwordHash,
+      status: 'active',
+    });
+    await db.insert(users).values({
+      id: 'pg-user-2',
+      email: 'sus@warung.id',
+      name: 'Suspended',
+      passwordHash,
+      status: 'suspended',
+    });
+    await db.insert(storeMembers).values({
+      storeId: store.id,
+      userId: 'pg-user-1',
+      role: 'manager',
+      status: 'active',
+    });
+
+    // valid → scope store, role dari membership
+    const login = await auth.login('seller@warung.id', 'ini-rahasia', { storeId: store.id });
+    const ctx = await auth.verifyToken(login.accessToken);
+    expect(ctx.storeId).toBe(store.id);
+    expect(ctx.role).toBe('manager');
+    expect(ctx.permissions).toContain('order.write');
+
+    // password salah → INVALID_CREDENTIALS; user suspended → ACCOUNT_SUSPENDED; non-member → NOT_A_MEMBER
+    await expect(auth.login('seller@warung.id', 'salah')).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    await expect(auth.login('sus@warung.id', 'ini-rahasia')).rejects.toMatchObject({ code: 'ACCOUNT_SUSPENDED' });
+    await expect(auth.login('seller@warung.id', 'ini-rahasia', { storeId: 'store-lain' })).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
+
+    // rotation: refresh lama invalid, refresh baru jalan, session lama ter-revoke
+    const rotated = await auth.refresh(login.refreshToken);
+    expect(rotated.refreshToken).not.toBe(login.refreshToken);
+    const ctx2 = await auth.verifyToken(rotated.accessToken);
+    expect(ctx2.role).toBe('manager');
+    await expect(auth.refresh(login.refreshToken)).rejects.toMatchObject({ code: 'SESSION_INVALID' });
+
+    // logout: session aktif dicabut
+    const third = await auth.refresh(rotated.refreshToken);
+    await auth.logout(third.refreshToken);
+    await expect(auth.refresh(third.refreshToken)).rejects.toMatchObject({ code: 'SESSION_INVALID' });
+
+    // session memakai hash token — raw refresh token tidak tersimpan di DB
+    const rows = await pool.query('SELECT token_hash FROM refresh_tokens');
+    expect(rows.rows.every((r) => r.token_hash !== third.refreshToken)).toBe(true);
   });
 });

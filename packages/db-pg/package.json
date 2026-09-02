@@ -22,6 +22,7 @@
     "@opensellvy/types": "workspace:*",
     "@opensellvy/module": "workspace:*",
     "@opensellvy/db": "workspace:*",
+    "@opensellvy/core": "workspace:*",
     "drizzle-orm": "^0.43.1",
     "pg": "^8.13.1"
   },

@@ -4,6 +4,12 @@ export interface AuthUser {
   userId: string;
   scope: string;
   authenticated: boolean;
+  /** dari core/auth UserContext (hanya saat token JWT diverifikasi). */
+  storeId?: string;
+  role?: string;
+  permissions?: string[];
+  /** expiry access token (ISO), bila berasal dari JWT. */
+  expiresAt?: string;
 }
 
 export interface ApiVariables {

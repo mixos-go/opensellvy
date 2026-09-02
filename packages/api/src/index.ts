@@ -1,6 +1,7 @@
 import { serve, type ServerType } from '@hono/node-server';
 import type { Services } from '@opensellvy/module';
 import type { ConnectorRegistry } from '@opensellvy/connector';
+import type { AuthService } from '@opensellvy/core';
 import { buildApp } from './rest/router';
 import type { ApiContext } from './context';
 import { ApiError } from './errors';
@@ -12,6 +13,7 @@ export { buildApp } from './rest/router';
 export { cors } from './middleware/cors';
 export { rateLimit } from './middleware/rate-limit';
 export { bearerAuth } from './middleware/auth.middleware';
+export type { AuthUser } from './env';
 
 export interface ApiConfig {
   port?: number;
@@ -30,6 +32,8 @@ export interface ApiDeps {
   credentials?: ApiContext['credentials'];
   /** dispatch webhook terverifikasi ke lapisan aplikasi (sync/event/worker). */
   onWebhook?: ApiContext['onWebhook'];
+  /** core/auth: login/refresh/logout via route + bearer JWT verification. */
+  authService?: AuthService;
 }
 
 export interface OpenSellvyServer {
@@ -50,6 +54,7 @@ export function createServer(config: ApiConfig = {}, deps: ApiDeps): OpenSellvyS
     tokens: deps.tokens,
     credentials: deps.credentials,
     onWebhook: deps.onWebhook,
+    authService: deps.authService,
     authMode: config.authMode ?? 'closed',
     secrets: {
       jwtSecret: config.jwtSecret,

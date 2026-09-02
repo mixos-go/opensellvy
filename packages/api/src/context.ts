@@ -1,5 +1,6 @@
 import type { Services, ModuleDeps } from '@opensellvy/module';
 import type { ConnectorRegistry } from '@opensellvy/connector';
+import type { AuthService } from '@opensellvy/core';
 
 export interface WebhookDispatch {
   (input: {
@@ -34,4 +35,6 @@ export interface ApiContext {
     webhook?: Partial<Record<string, string>>;
   };
   authMode?: 'closed' | 'open';
+  /** core/auth (login/refresh/verify access token). Bila ada → bearer memakai JWT. */
+  authService?: AuthService;
 }

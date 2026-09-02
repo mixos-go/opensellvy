@@ -3,6 +3,8 @@ import type { PlatformPlugin, TokenStore } from '@opensellvy/connector';
 import { connectors, registerPlatform } from '@opensellvy/connector';
 import { createServices } from '@opensellvy/module';
 import type { Services } from '@opensellvy/module';
+import { createAuthService, hashPassword } from '@opensellvy/core';
+import type { AuthService, RefreshSession, RefreshSessionStore } from '@opensellvy/core';
 import { createServer, buildApp, signApiToken } from '../src';
 import type { ApiContext } from '../src';
 
@@ -12,6 +14,29 @@ function memoryTokenStore(): TokenStore {
     save: (storeId, platform, token) => Promise.resolve(void map.set(`${storeId}:${platform}`, token)),
     get: (storeId, platform) => Promise.resolve(map.get(`${storeId}:${platform}`) as never),
     delete: (storeId, platform) => Promise.resolve(void map.delete(`${storeId}:${platform}`)),
+  };
+}
+
+function memorySessionStore(): RefreshSessionStore {
+  const byHash = new Map<string, RefreshSession>();
+  const byUser = new Map<string, RefreshSession[]>();
+  return {
+    save: async (s) => {
+      byHash.set(s.tokenHash, s);
+      byUser.set(s.userId, [...(byUser.get(s.userId) ?? []), s]);
+    },
+    findByTokenHash: async (tokenHash) => byHash.get(tokenHash),
+    deleteById: async (id) => {
+      const found = [...byHash.values()].find((s) => s.id === id);
+      if (found) {
+        byHash.delete(found.tokenHash);
+        byUser.set(found.userId, (byUser.get(found.userId) ?? []).filter((s) => s.id !== id));
+      }
+    },
+    revokeAllForUser: async (userId) => {
+      for (const s of byUser.get(userId) ?? []) byHash.delete(s.tokenHash);
+      byUser.delete(userId);
+    },
   };
 }
 
@@ -203,5 +228,92 @@ describe('@opensellvy/api — Hono REST server', () => {
       body: JSON.stringify({ storeId: 'x', code: undefined }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it('auth JWT via core/auth: login → bearer verify → refresh rotation → logout revoke', async () => {
+    let auth: AuthService | undefined;
+    const apiAuth = async (): Promise<AuthService> => {
+      if (auth) return auth;
+      const passwordHash = await hashPassword('rahasia-api');
+      auth = createAuthService({
+        jwtSecret: JWT,
+        issuer: 'opensellvy',
+        audience: 'panel',
+        findUserByEmail: async (email) =>
+          email === 'seller@api.id'
+            ? { id: 'api-user-1', email, name: 'Seller', passwordHash, status: 'active' }
+            : undefined,
+        getMemberRole: async (storeId, userId) => (storeId === 'api-store-1' && userId === 'api-user-1' ? 'manager' : undefined),
+        sessions: memorySessionStore(),
+      });
+      return auth;
+    };
+    const apiAuthCtx = async (): Promise<Partial<ApiContext>> => ({ authService: await apiAuth() });
+
+    // login → 200 + token
+    const login = await app(await apiAuthCtx()).request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'seller@api.id', password: 'rahasia-api' }),
+    });
+    expect(login.status).toBe(200);
+    const tokens = await login.json();
+    expect(tokens.accessToken).toBeTruthy();
+    expect(tokens.refreshToken).toBeTruthy();
+
+    // access token JWT diverifikasi oleh bearerAuth
+    const storesRes = await app(await apiAuthCtx()).request('/api/stores', {
+      headers: { authorization: `Bearer ${tokens.accessToken}` },
+    });
+    expect(storesRes.status).toBe(200);
+
+    // password salah → 401 anti-lockout
+    const badLogin = await app(await apiAuthCtx()).request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'seller@api.id', password: 'salah' }),
+    });
+    expect(badLogin.status).toBe(401);
+    expect((await badLogin.json()).error.code).toBe('UNAUTHORIZED');
+
+    // refresh rotation: token baru, refresh lama tak bisa dipakai lagi
+    const refreshed = await app(await apiAuthCtx()).request('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    });
+    expect(refreshed.status).toBe(200);
+    const rotated = await refreshed.json();
+    expect(rotated.refreshToken).not.toBe(tokens.refreshToken);
+    const reuse = await app(await apiAuthCtx()).request('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    });
+    expect(reuse.status).toBe(401);
+    expect((await reuse.json()).error.code).toBe('TOKEN_INVALID');
+
+    // logout mencabut session aktif
+    const logout = await app(await apiAuthCtx()).request('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rotated.refreshToken }),
+    });
+    expect(logout.status).toBe(204);
+    const afterLogout = await app(await apiAuthCtx()).request('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rotated.refreshToken }),
+    });
+    expect(afterLogout.status).toBe(401);
+
+    // authService belum diset → AUTH_NOT_CONFIGURED
+    const noAuth = await app().request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'a@b.id', password: 'x' }),
+    });
+    expect(noAuth.status).toBe(401);
+    expect((await noAuth.json()).error.code).toBe('AUTH_NOT_CONFIGURED');
   });
 });

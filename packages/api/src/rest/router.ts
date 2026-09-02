@@ -9,6 +9,7 @@ import { healthHandler } from './controllers/health.controller';
 import { listStoresHandler, createStoreHandler, getStoreHandler } from './controllers/store.controller';
 import { listOrdersHandler, getOrderHandler, syncOrdersHandler } from './controllers/order.controller';
 import { webhookReceiverHandler } from './controllers/webhook.controller';
+import { loginHandler, refreshHandler, logoutHandler } from './controllers/auth.controller';
 import {
   listProductsHandler,
   createProductHandler,
@@ -35,6 +36,11 @@ export function buildApp(ctx: ApiContext): Hono<{ Variables: { api: ApiContext; 
 
   // Public
   app.get('/health', healthHandler);
+
+  // Auth (core/auth) — login/refresh/logout publik; bearer verification di bearerAuth
+  app.post('/api/auth/login', loginHandler);
+  app.post('/api/auth/refresh', refreshHandler);
+  app.post('/api/auth/logout', logoutHandler);
 
   // Store — CRUD-lite (bearer auth, fail-closed kecuali authMode: 'open')
   app.get('/api/stores', bearerAuth, listStoresHandler);

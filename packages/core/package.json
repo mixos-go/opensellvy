@@ -15,7 +15,9 @@
       "types": "./dist/auth/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
@@ -23,7 +25,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@opensellvy/types": "workspace:*"
+    "@opensellvy/types": "workspace:*",
+    "bullmq": "^6.3.4",
+    "ioredis": "^6.0.0"
   },
   "license": "MIT"
 }

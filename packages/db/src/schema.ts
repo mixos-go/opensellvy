@@ -45,7 +45,7 @@ export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  passwordHash: text('password_hash'),
+  passwordHash: text('password_hash').notNull().default(''),
   status: text('status').notNull().default('active'),
   createdAt: tz('created_at').notNull().defaultNow(),
   updatedAt: tz('updated_at').notNull().defaultNow(),
@@ -73,6 +73,9 @@ export const refreshTokens = pgTable('refresh_tokens', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  email: text('email').notNull().default(''),
+  storeId: text('store_id').references(() => stores.id, { onDelete: 'set null' }),
+  role: text('role').notNull().default('owner'),
   tokenHash: text('token_hash').notNull().unique(),
   expiresAt: tz('expires_at').notNull(),
   revoked: boolean('revoked').notNull().default(false),

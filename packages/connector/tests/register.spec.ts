@@ -14,7 +14,7 @@ const dummy: PlatformPlugin = {
   auth: {
     getAuthorizeUrl: () => Promise.resolve(''),
     exchangeCode: () => Promise.resolve({ accessToken: '' }),
-    refreshToken: () => Promise.resolve(),
+    refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {
     getShop: () => Promise.resolve({ platformShopId: 'shop-1', shopName: 'Dummy Shop', marketplace: 'Dummy' }),
@@ -35,7 +35,7 @@ const dummy: PlatformPlugin = {
 };
 
 describe('platform registry', () => {
-  it('registers once and rejects duplicate code', () => {
+  it('registers a plugin and lists its platform', () => {
     registerPlatform(dummy);
     const list = listPlatforms();
     expect(list).toContain('shopee');
@@ -48,5 +48,21 @@ describe('platform registry', () => {
 
   it('throws for unknown platform', () => {
     expect(() => getPlatform('lazada')).toThrow('not registered');
+  });
+
+  it('rejects silent duplicate registration by default', () => {
+    expect(() => registerPlatform(dummy)).toThrow('sudah terdaftar');
+    // plugin asli dipertahankan
+    expect(getPlatform('shopee')).toBe(dummy);
+  });
+
+  it('allows replacing a plugin explicitly', () => {
+    const other: PlatformPlugin = {
+      ...dummy,
+      name: 'Dummy v2',
+      gateway: { ...dummy.gateway, getShop: () => Promise.resolve({ platformShopId: 's2', shopName: 'V2', marketplace: 'X' }) },
+    };
+    expect(() => registerPlatform(other, { replace: true })).not.toThrow();
+    expect(getPlatform('shopee')).toBe(other);
   });
 });

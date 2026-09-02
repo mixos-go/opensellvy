@@ -3,8 +3,38 @@ import type { PlatformPlugin } from './base.connector';
 
 const registry = new Map<PlatformCode, PlatformPlugin>();
 
-export function registerPlatform(plugin: PlatformPlugin): void {
+const DEFAULTS = { replace: false, force: false } as const;
+
+export interface RegisterOptions {
+  /**
+   * true → timpa plugin yang sudah ada untuk kode yang sama (default false).
+   * Default (false) melempar RegisterError agar dua adapter tidak diam-diam
+   * saling menimpa di registry satu-gate.
+   */
+  replace?: boolean;
+  /** alias replace — untuk backward-compat pola lain. */
+  force?: boolean;
+}
+
+export function registerPlatform(plugin: PlatformPlugin, options: RegisterOptions = {}): void {
+  const { replace = DEFAULTS.replace, force = DEFAULTS.force } = options;
+  const shouldReplace = replace || force;
+  if (registry.has(plugin.platform) && !shouldReplace) {
+    const existing = registry.get(plugin.platform)!;
+    throw new RegisterError(
+      `Platform "${plugin.platform}" sudah terdaftar (${existing.name}). ` +
+        'Pakai { replace: true } untuk menimpa, atau pastikan hanya satu adapter per platform.',
+      plugin.platform,
+    );
+  }
   registry.set(plugin.platform, plugin);
+}
+
+export class RegisterError extends Error {
+  constructor(message: string, public readonly platform: PlatformCode) {
+    super(message);
+    this.name = 'RegisterError';
+  }
 }
 
 export function getPlatform(platform: PlatformCode): PlatformPlugin {

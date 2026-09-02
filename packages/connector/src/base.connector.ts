@@ -22,7 +22,12 @@ export type Capability =
 export interface PlatformAuth {
   getAuthorizeUrl(): Promise<string>;
   exchangeCode(code: string): Promise<OAuthToken>;
-  refreshToken(): Promise<void>;
+  /**
+   * Perbarui access token dari refreshToken milik context.
+   * Return token baru agar caller bisa mem-persist ke TokenStore.
+   * Melempar jika tidak ada refreshToken valid.
+   */
+  refreshToken(context: ConnectorContext): Promise<OAuthToken>;
 }
 
 export interface PlatformShopProfile {

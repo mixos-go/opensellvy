@@ -237,7 +237,7 @@ export class PostgresRepositories {
         { ...(opts?.limit !== undefined ? { limit: opts.limit } : {}), ...(opts?.cursor !== undefined ? { cursor: opts.cursor } : {}) },
       );
     },
-    delete: async (id) => void this.db.delete(products).where(eq(products.id, id)),
+    delete: async (id) => { await this.db.delete(products).where(eq(products.id, id)); },
   };
 
   readonly inventoryRepo: Repositories['inventory'] = {
@@ -423,7 +423,7 @@ export class PostgresRepositories {
       (await this.db.query.channels.findFirst({
         where: and(eq(channels.platform, platform as never), eq(channels.platformShopId, platformShopId)),
       }))?.payload as ChannelConnection | undefined,
-    delete: async (id) => void this.db.delete(channels).where(eq(channels.id, id)),
+    delete: async (id) => { await this.db.delete(channels).where(eq(channels.id, id)); },
   };
 
   readonly storesRepo: Repositories['stores'] = {
@@ -452,7 +452,7 @@ export class PostgresRepositories {
       const rows = await this.db.select().from(stores);
       return rows.map(mapStore);
     },
-    delete: async (id) => void this.db.delete(stores).where(eq(stores.id, id)),
+    delete: async (id) => { await this.db.delete(stores).where(eq(stores.id, id)); },
   };
 
   readonly usersRepo: Repositories['users'] = {
@@ -557,7 +557,7 @@ export class PostgresRepositories {
       const rows = await this.db.select().from(warehouses).where(eq(warehouses.storeId, storeId));
       return rows.map((r) => r.payload as Warehouse);
     },
-    delete: async (id) => void this.db.delete(warehouses).where(eq(warehouses.id, id)),
+    delete: async (id) => { await this.db.delete(warehouses).where(eq(warehouses.id, id)); },
   };
 
   readonly returnsRepo: Repositories['returns'] = {

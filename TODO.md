@@ -92,9 +92,12 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
      - API (Hono): auth **fail-closed default** (`authMode:'open'` utk dev eksplisit),
        webhook dispatch via `onWebhook`, route products/inventory/channels + OAuth callback;
        + tests 9.
+     - API auth (core/auth): `bearerAuth` verifikasi JWT via `authService` (fallback HMAC legacy
+       utk internal token), route `POST /api/auth/{login,refresh,logout}` — login/rotate/logout
+       end-to-end, mapping AuthError → HTTP (401/403); + tests 1 (api 10).
 - Tests battle: finance/analytics/returns/fulfillment/promotion/payment/user+audit/
-        shipping/catalog/updateStatus-edges (module 33), connector 10, api 9, platform-local 4,
-        db-pg 3, opensellvy 2, core 42 = **103 test hijau**, typecheck & build 14/14, demo:local jalan.
+shipping/catalog/updateStatus-edges (module 33), connector 10, api 10, platform-local 4,
+       db-pg 3, opensellvy 2, core 42 = **104 test hijau**, typecheck & build 14/14, demo:local jalan.
       - core/auth: JWT HS256 (sign/verify, issuer/audience/maxAge), password scrypt, AuthService
         login/refresh(rotation)/logout/logoutAll/verifyToken, session store (hash token, revoke),
         fail-closed & anti-lockout (INVALID_CREDENTIALS tak bocorkan email/password); + tests 13.
@@ -212,7 +215,7 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
    - `[x]` OAuth: `GET /api/stores/:storeId/oauth/:platform/authorize` + `POST /api/oauth/:platform/callback`
    - `[x]` `createServer(config, deps)` + `buildApp(ctx)`; controller tak pernah akses repo langsung
 `[ ]` GraphQL schema (baseline resolvers per module) — deferred
-`[ ]` Auth provider eksternal (decision #8 open) — bearer HMAC internal jalan dulu
+`[x]` Auth provider guide (`core/auth` + `POST /api/auth/{login,refresh,logout}`; bearer JWT via `authService`; HMAC legacy fallback; decision #8)
 
 ---
 
@@ -230,7 +233,7 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 `[ ]` Getting started guide
 `[ ]` Per-platform connector docs
 `[ ]` API reference
-`[~]` Unit tests — **103 test hijau** (core 42, connector 10, module 33, platform-local 4, api 9, db-pg 3, opensellvy 2)
+`[~]` Unit tests — **104 test hijau** (core 42, connector 10, module 33, platform-local 4, api 10, db-pg 3, opensellvy 2)
 `[ ]` Integration tests (mock server per platform)
 `[ ]` CI (lint, typecheck, test, build)
 

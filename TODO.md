@@ -94,12 +94,15 @@ cukup update adapter ybs, internal OMS aman. Bonus: adapter `local` membuktikan 
        + tests 9.
 - Tests battle: finance/analytics/returns/fulfillment/promotion/payment/user+audit/
         shipping/catalog/updateStatus-edges (module 33), connector 10, api 9, platform-local 4,
-        db-pg 2, opensellvy 2, core 42 = **102 test hijau**, typecheck & build 14/14, demo:local jalan.
+        db-pg 3, opensellvy 2, core 42 = **103 test hijau**, typecheck & build 14/14, demo:local jalan.
       - core/auth: JWT HS256 (sign/verify, issuer/audience/maxAge), password scrypt, AuthService
         login/refresh(rotation)/logout/logoutAll/verifyToken, session store (hash token, revoke),
         fail-closed & anti-lockout (INVALID_CREDENTIALS tak bocorkan email/password); + tests 13.
       - core cache/queue: `createMemoryCache` (TTL lazy + sweep + invalidate prefix/glob) &
         `createMemoryQueue` (delay, retry attempts, remove) — pengganti nyata Redis/BullMQ nanti; + tests 10.
+      - db-pg: `createPgRefreshSessionStore` + `createPgAuthDeps` (findAuthUserByEmail + getMemberRole +
+        sessions) → `createAuthService` e2e di Postgres nyata (login/verify/rotation/logout, hash token
+        tak tersimpan raw); migration 00007; + tests 1 (db-pg 3).
   7. `[ ]` **Shopee adapter**: study docs → implementasi clean-room (OAuth, sign, pull/push, webhook, mapper)
  8. `[ ]` Replikasi adapter ke TTS/Tokopedia → Lazada → Blibli
 
@@ -227,7 +230,7 @@ fulfillment/promotion/payment/user+audit/shipping/catalog/updateStatus-edges).
 `[ ]` Getting started guide
 `[ ]` Per-platform connector docs
 `[ ]` API reference
-`[~]` Unit tests — **102 test hijau** (core 42, connector 10, module 33, platform-local 4, api 9, db-pg 2, opensellvy 2)
+`[~]` Unit tests — **103 test hijau** (core 42, connector 10, module 33, platform-local 4, api 9, db-pg 3, opensellvy 2)
 `[ ]` Integration tests (mock server per platform)
 `[ ]` CI (lint, typecheck, test, build)
 

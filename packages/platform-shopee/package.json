@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
+    "generate": "tsx scripts/generate-api.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run --passWithNoTests"
@@ -24,6 +25,9 @@
     "@opensellvy/connector": "workspace:*",
     "@opensellvy/core": "workspace:^",
     "@opensellvy/types": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
   },
   "license": "MIT"
 }

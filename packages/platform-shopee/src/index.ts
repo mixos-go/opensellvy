@@ -15,3 +15,9 @@ export {
 } from './shopee.client';
 export { createShopeeAuth, type ShopeeAuth } from './shopee.auth';
 export { createShopeeWebhook, type ShopeeWebhookOptions } from './shopee.webhook';
+export {
+  createShopeeApi,
+  type ShopeeApi,
+  type ShopeeResp,
+  type ShopeeApiOptions,
+} from './generated';

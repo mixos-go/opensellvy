@@ -16,6 +16,41 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-03]` Pos: OAuth+TokenStore+auto-refresh + PILOT LIVE GATEWAY Order+Product ✅ (belum commit)
+
+- **Baseline test saat ini:** core 50 · connector 10 · platform-shopee **32** · module 33 ·
+  platform-local 4 · api 10 · db-pg 15 · opensellvy 2 = **156 test** hijau. platform-shopee typecheck 0, build sukses.
+- **DIBANGUN (UNCOMMITTED) — OAuth connect utuh + TokenStore + auto-refresh, TANPA ubah kontrak `@opensellvy/connector`:**
+  - `packages/platform-shopee/src/shopee.connector.ts`:
+    - `ShopeePluginOptions` baru: `tokenStore?` (default `createMemoryTokenStore()` dari connector),
+      `autoRefresh?` (default true), `refreshBeforeMs?` (default 5 menit), `accessToken?`/`shopId?` (dev quick-start).
+    - `validToken(context)` — muat token dari TokenStore → bila autoRefresh & token punya refreshToken
+      & (expiresAt lewat/tinggal < refreshBeforeMs) → `auth.refreshToken()` → persist token fresh ke store.
+    - `auth.exchangeCode(context, code)` persist token (access+refresh) ke TokenStore per seller
+      (`storeId` + platform) → desain produksi "otorisasi sekali, refresh otomatis".
+  - `packages/platform-shopee/src/shopee.mapper.ts` — `mapProduct` kini toleran format `get_item_base_info`
+    (`item_list[].image.image_url_list`, `price_info`, tanpa `models`) + tetap dukung shape lama (`image:Array<{url}>`,
+    `models`, `price`). `ShopeeItemInfo.image` diperluas jadi union object|array.
+  - **SCALE KE SEMUA KATEGORI:** `shopee.connector.ts` + `index.ts` tambah tipe `ShopeePlugin = PlatformPlugin & ShopeeApiAccessor`
+    dan accessor `plugin.api(context): Promise<ShopeeApi>` → facade **29 kategori / 444 API** ter-bind (client + accessToken valid
+    + auto-refresh + shopId dari context) & `plugin.client(context)`. Konsumen dapat memanggil SEMUA API Shopee (bukan hanya
+    ~10 method gateway). Kontrak `PlatformPlugin` tetap utuh (additive extension).
+  - `packages/platform-shopee/scripts/live-e2e.ts` — script uji live via JALUR GATEWAY
+    (`getShop`/`pullOrders`/`pullProducts`); input `REFRESH_TOKEN` | `CODE` | `ACCESS_TOKEN`.
+  - `packages/platform-shopee/tests/shopee.connector.spec.ts` — +4 test (OAuth persist: exchangeCode simpan token,
+    auto-refresh saat kadaluarsa+persist, dev quick-start; api accessor: facade 29 kategori). **32 hijau.**
+- **PILOT LIVE SANDBOX (access token `...E624567`, shop `227844766`, OpenSANDBOX1132...):**
+  - `getShop` ✅ → platformShopId `227844766`, shopName `OpenSANDBOX1132559f068d6259ec8`, region `ID`.
+  - `pullOrders` ✅ → 1 order `2609021H4790MP`, status `completed`.
+  - `pullProducts` ✅ → 1 product `TEST PRODUK` (0 varian — base_info tanpa models; model-level via get_model_list).
+  - **Catatan fix saat live:** `get_item_list` WAJIB `item_status` (Required) → `error_unknown` tanpa itu;
+    endpoint detail item = **`get_item_base_info`** (BUKAN `get_item_detail` — 404), `item_id_list` pakai **koma** (bukan `[a b]`).
+- **Verifikasi:** 31 test hijau · typecheck 0 · build sukses · **kontrak `@opensellvy/connector` TIDAK tersentuh**
+  (git diff connector kosong — satu gate dijaga, syarat "work tanpa ubah gate/kontrak" TERPENUHI).
+- **Belum di-commit** (user belum minta). Kontrak inti tidak berubah; hanya opsi internal plugin + mapper + script + test.
+- **TODO berikutnya:** scale semua kategori (29) via jalur gateway (Order/Product sudah teruji live);
+  prioritas berikut sesuai §4.1.1 hardening (syncInventory, pullOrders multi-order+pagination, updateOrder logistics channel).
+
 ### `[2026-09-03]` Pos: generator Shopee API (444) — pilot Order+Product hijau (belum commit)
 
 - **Baseline test saat ini:** core 50 · connector 10 · platform-shopee 27 · module 33 ·

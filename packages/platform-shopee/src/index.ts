@@ -3,6 +3,8 @@ export {
   registerShopee,
   createShopeePlugin,
   type ShopeePluginOptions,
+  type ShopeePlugin,
+  type ShopeeApiAccessor,
 } from './shopee.connector';
 export { mapOrder, mapProduct, mapReturn } from './shopee.connector';
 export {

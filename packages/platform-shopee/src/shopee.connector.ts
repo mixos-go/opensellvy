@@ -4,11 +4,13 @@ import type {
   OAuthToken,
   PlatformCredentials,
 } from '@opensellvy/connector';
-import { registerPlatform } from '@opensellvy/connector';
+import { registerPlatform, createMemoryTokenStore } from '@opensellvy/connector';
+import type { TokenStore } from '@opensellvy/connector';
 import { ShopeeClient } from './shopee.client';
 import { createShopeeAuth, ShopeeAuth } from './shopee.auth';
 import { createShopeeWebhook } from './shopee.webhook';
 import { mapOrder, mapProduct, mapReturn, ShopeeOrderDetail, ShopeeItemInfo } from './shopee.mapper';
+import { createShopeeApi, type ShopeeApi } from './generated';
 
 export interface ShopeePluginOptions {
   /** default credentials — biasanya diisi per-context dari registry, bukan di sini */
@@ -17,46 +19,79 @@ export interface ShopeePluginOptions {
   fetch?: typeof fetch;
   /** injeksi timestamp (detik) utk test signing deterministik. */
   now?: () => number;
+  /**
+   * TokenStore persist OAuth per seller (key storeId+platform). Default: memory
+   * (single-process). Di produksi berikan store yang ter-connect ke DB kamu.
+   */
+  tokenStore?: TokenStore;
+  /** refresh otomatis bila token mendekati kadaluarsa (default true). */
+  autoRefresh?: boolean;
+  /** dev/quick-start: access token langsung (bukan desain produksi — gunakan OAuth). */
+  accessToken?: string;
+  /** dev/quick-start: shop_id sandbox/live utk access token di atas. */
+  shopId?: string;
+  /** ambang refresh dini (ms sebelum kadaluarsa), default 5 menit. */
+  refreshBeforeMs?: number;
 }
 
-interface ShopeeTokenCache {
-  token: OAuthToken;
-  shopId?: string;
+const PLATFORM = 'shopee' as const;
+
+/** Akses ke SELURUH 29 kategori / 444 API Shopee via facade generated (bukan hanya ~10 method gateway). */
+export interface ShopeeApiAccessor {
+  /**
+   * Facade lengkap (29 kategori) ter-bind pada satu seller (context):
+   * client + accessToken (valid, auto-refresh) + shopId ter-resolve dari context.
+   * shop/public API dibedakan otomatis (ShopeeApiType per kategori).
+   */
+  api(context: ConnectorContext): Promise<ShopeeApi>;
+  /** Client Shopee low-level ter-bind pada credentials context (tanpa token resolution). */
+  client(context: ConnectorContext): ShopeeClient;
 }
+
+export type ShopeePlugin = PlatformPlugin & ShopeeApiAccessor;
 
 /**
  * Adapter Shopee (full Open Platform v2). Contoh referensi penerapan
- * PlatformPlugin nyata: signing HMAC-SHA256 benar + satu-gate registry.
+ * PlatformPlugin nyata: signing HMAC-SHA256 benar + satu-gate registry +
+ * sinambung OAuth per-seller via TokenStore + auto-refresh.
+ *
+ * Desain produksi: tiap seller otorisasi SEKALI via exchangeCode → token
+ * (access+refresh) di-persist ke TokenStore. Saat accessToken mendekati/lewat
+ * kadaluarsa, tokenFor() otomatis refreshToken() dari refreshToken yang
+ * tersimpan — tanpa perlu intervensi manual per seller.
  */
-export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformPlugin {
-  // token per-context disimpan di sini (adapter stateless kalau TokenStore dipakai);
-  // utk pola rujukan kita simpan sederhana key=storeId.
-  const cache = new Map<string, ShopeeTokenCache>();
+export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlugin {
+  const tokenStore = options.tokenStore ?? createMemoryTokenStore();
+  const autoRefresh = options.autoRefresh ?? true;
+  const refreshBeforeMs = options.refreshBeforeMs ?? 5 * 60 * 1000;
 
   function clientFor(credentials: PlatformCredentials): ShopeeClient {
     return new ShopeeClient({ credentials, ...(options.fetch ? { fetch: options.fetch } : {}), ...(options.now ? { now: options.now } : {}) });
   }
 
-  function shopAccess(context: ConnectorContext): ShopeeClient {
-    return new ShopeeClient({ credentials: context.credentials, ...(options.fetch ? { fetch: options.fetch } : {}), ...(options.now ? { now: options.now } : {}) });
+  async function loadToken(context: ConnectorContext): Promise<OAuthToken | undefined> {
+    const fromDev = options.accessToken ? { accessToken: options.accessToken } : undefined;
+    const stored = await tokenStore.get(context.storeId, PLATFORM);
+    return stored ?? fromDev ?? context.token;
   }
 
-  function tokenFor(context: ConnectorContext): ShopeeTokenCache {
-    const existing = cache.get(context.storeId);
-    if (existing) return existing;
-    const entry: ShopeeTokenCache = { token: context.token };
-    if (context.credentials.shopId) entry.shopId = context.credentials.shopId;
-    cache.set(context.storeId, entry);
-    return entry;
-  }
-
-  /** request opts shop-level — accessToken wajib, shopId jika ada. */
-  function shopOpts(entry: ShopeeTokenCache): { accessToken: string; shopId?: string } {
-    return { accessToken: entry.token.accessToken, ...(entry.shopId ? { shopId: entry.shopId } : {}) };
-  }
-
-  function shopClient(context: ConnectorContext): ShopeeClient {
-    return shopAccess(context);
+  /** Ambil token valid utk request shop; auto-refresh bila perlu lalu persist. */
+  async function validToken(context: ConnectorContext): Promise<OAuthToken> {
+    let token = await loadToken(context);
+    if (!token || !token.accessToken) {
+      token = context.token;
+    }
+    if (autoRefresh && token.refreshToken) {
+      const expired = token.expiresAt ? Date.now() + refreshBeforeMs >= token.expiresAt : false;
+      if (expired || !token.accessToken) {
+        const client = clientFor(context.credentials);
+        const sa = createShopeeAuth(client) as ShopeeAuth;
+        const refreshed = await sa.refreshToken(token.refreshToken, context.credentials.shopId);
+        token = { ...token, ...refreshed };
+        await tokenStore.save(context.storeId, PLATFORM, token);
+      }
+    }
+    return token;
   }
 
   const auth: PlatformPlugin['auth'] = {
@@ -69,40 +104,36 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
       const client = clientFor(context.credentials);
       const sa = createShopeeAuth(client) as ShopeeAuth;
       const token = await sa.exchangeCode(code, context.credentials.shopId);
-      const entry: ShopeeTokenCache = { token };
-      const resolvedShopId = token.shopId ?? context.credentials.shopId;
-      if (resolvedShopId) entry.shopId = resolvedShopId;
-      cache.set(context.storeId, entry);
+      await tokenStore.save(context.storeId, PLATFORM, token);
       return token;
     },
     async refreshToken(context) {
-      const entry = tokenFor(context);
-      const client = clientFor(context.credentials);
-      const sa = createShopeeAuth(client) as ShopeeAuth;
-      const token = await sa.refreshToken(entry.token.refreshToken ?? '', entry.shopId as string | undefined);
-      entry.token = token;
+      const token = await validToken(context);
       return token;
     },
   };
 
   const gateway: PlatformPlugin['gateway'] = {
     async getShop(context) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
       const info = await client.request<{ shop_id?: string | number; shop_name?: string; region?: string }>(
         { apiType: 'shop', path: '/api/v2/shop/get_shop_info', method: 'GET' },
-        shopOpts(entry),
+        { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) },
       );
       return {
-        platformShopId: info.shop_id !== undefined ? String(info.shop_id) : entry.shopId ?? '',
+        platformShopId: info.shop_id !== undefined ? String(info.shop_id) : shopId ?? '',
         shopName: info.shop_name ?? '',
         marketplace: info.region ?? '',
       };
     },
 
     async pullOrders(context, opts) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       const list = await client.request<{ order_list?: Array<{ order_sn?: string }>; more?: boolean }>(
         {
           apiType: 'shop',
@@ -110,18 +141,18 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
           method: 'GET',
           params: {
             time_range_field: 'create_time',
-            time_from: (opts?.since ? opts.since.getTime() / 1000 : Math.floor(Date.now() / 1000) - 7 * 86400),
+            time_from: opts?.since ? opts.since.getTime() / 1000 : Math.floor(Date.now() / 1000) - 7 * 86400,
             time_to: Math.floor(Date.now() / 1000),
             page_size: 100,
           },
         },
-        shopOpts(entry),
+        acc,
       );
       const ids = (list.order_list ?? []).map((o) => o.order_sn).filter((x): x is string => !!x);
       if (ids.length === 0) return [];
       const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
         { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: ids.join(',') } },
-        shopOpts(entry),
+        acc,
       );
       const orderList = detail.order_list ?? [];
       if (orderList.length === 0) return [];
@@ -133,11 +164,13 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     },
 
     async getOrder(context, platformOrderId) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
         { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: platformOrderId } },
-        shopOpts(entry),
+        acc,
       );
       return mapOrder(
         context.storeId,
@@ -153,9 +186,10 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     },
 
     async updateOrder(context, orderId, patch) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
-      const acc = shopOpts(entry);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       const status = patch.status;
       if (status === 'cancel' || /cancel/i.test(String(status ?? ''))) {
         await client.request(
@@ -193,25 +227,33 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     },
 
     async pullProducts(context) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       const list = await client.request<{ item?: Array<{ item_id?: number | string }>; total_count?: number }>(
-        { apiType: 'shop', path: '/api/v2/product/get_item_list', method: 'GET', params: { offset: 0, page_size: 100 } },
-        shopOpts(entry),
+        { apiType: 'shop', path: '/api/v2/product/get_item_list', method: 'GET', params: { offset: 0, page_size: 100, item_status: ['NORMAL'] } },
+        acc,
       );
       const ids = (list.item ?? []).map((i) => i.item_id).filter((x): x is string | number => x !== undefined);
       if (ids.length === 0) return [];
-      const detail = await client.request<{ item?: ShopeeItemInfo[] }>(
-        { apiType: 'shop', path: '/api/v2/product/get_item_detail', method: 'GET', params: { item_id_list: ids.join(',') } },
-        shopOpts(entry),
+      const detail = await client.request<{ item_list?: ShopeeItemInfo[] }>(
+        {
+          apiType: 'shop',
+          path: '/api/v2/product/get_item_base_info',
+          method: 'GET',
+          params: { item_id_list: ids.map(String).join(','), need_tax_info: true },
+        },
+        acc,
       );
-      return (detail.item ?? []).map((it) => mapProduct(context.storeId, it));
+      return (detail.item_list ?? []).map((it) => mapProduct(context.storeId, it));
     },
 
     async pushProduct(context, product) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
-      const acc = shopOpts(entry);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       const body = {
         item_name: product.name,
         description: product.description,
@@ -235,9 +277,10 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     },
 
     async syncInventory(context, items) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
-      const acc = shopOpts(entry);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       for (const item of items) {
         await client.request(
           {
@@ -255,9 +298,10 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     },
 
     async manageReturn(context, request, action) {
-      const client = shopClient(context);
-      const entry = tokenFor(context);
-      const acc = shopOpts(entry);
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
       const path =
         action === 'approve'
           ? '/api/v2/returns/confirm'
@@ -290,6 +334,18 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): PlatformP
     auth,
     gateway,
     webhook,
+    client(context) {
+      return clientFor(context.credentials);
+    },
+    async api(context) {
+      const client = clientFor(context.credentials);
+      const token = await validToken(context);
+      const shopId = context.credentials.shopId ?? options.shopId;
+      const opts: { accessToken?: string; shopId?: string } = {};
+      if (token.accessToken) opts.accessToken = token.accessToken;
+      if (shopId) opts.shopId = shopId;
+      return createShopeeApi(client, opts);
+    },
   };
 }
 

@@ -95,7 +95,7 @@ export interface ShopeeItemInfo {
   item_quantity?: number;
   price?: number;
   currency?: string;
-  image?: Array<{ url?: string }>;
+  image?: Array<{ url?: string }> | { image_url_list?: string[]; image_id_list?: string[] };
   attributes?: Array<{ attributes_id?: number; value?: string; original_value?: string }>;
   category_id?: number | string;
   brand?: string;
@@ -110,6 +110,9 @@ export interface ShopeeItemInfo {
     normal_stock?: number;
     tier_index?: number[];
   }>;
+  price_info?: Array<{ currency?: string; current_price?: number; original_price?: number }>;
+  image_url_list?: string[];
+  weight?: string;
 }
 
 const SHOPEE_STATUS: Record<string, UnifiedOrder['status']> = {
@@ -232,19 +235,26 @@ export function mapOrder(storeId: string, channelId: string, platform: PlatformC
 
 export function mapProduct(storeId: string, raw: ShopeeItemInfo): UnifiedProduct {
   const id = `sp-${raw.item_id ?? ''}`;
+  const pi = raw.price_info?.[0];
+  const currency = pi?.currency ?? raw.currency ?? 'IDR';
   const variants =
     raw.models?.map((m) => ({
       id: `sv-${raw.item_id ?? ''}-${m.model_id ?? ''}`,
       sku: m.model_sku ?? raw.item_sku ?? '',
       ...(m.model_name !== undefined ? { name: m.model_name } : {}),
-      price: money(m.price ?? raw.price ?? 0, raw.currency ?? 'IDR'),
+      price: money(m.price ?? pi?.current_price ?? raw.price ?? 0, currency),
       stock: m.normal_stock ?? 0,
       ...(m.model_id !== undefined ? { platformVariantId: String(m.model_id) } : {}),
       options: {},
     })) ?? [];
 
-  const images: UnifiedProduct['images'] =
-    raw.image?.map((img, i) => ({ url: img.url ?? '', position: i })) ?? [];
+  const images: UnifiedProduct['images'] = (() => {
+    if (raw.image_url_list?.length) return raw.image_url_list.map((url, i) => ({ url, position: i }));
+    const imgObj = raw.image && !Array.isArray(raw.image) ? raw.image : undefined;
+    if (imgObj?.image_url_list?.length) return imgObj.image_url_list.map((url, i) => ({ url, position: i }));
+    if (Array.isArray(raw.image)) return raw.image.map((img, i) => ({ url: img.url ?? '', position: i }));
+    return [];
+  })();
 
   const attributes: Record<string, unknown> = {};
   for (const a of raw.attributes ?? []) {

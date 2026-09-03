@@ -66,7 +66,7 @@ async function main(): Promise<void> {
     platformAccountId: 's-live:shopee',
     credentials,
     token: {} as OAuthToken,
-  } as Parameters<typeof plugin.gateway.getShop>[0];
+  } as Parameters<typeof plugin.gateway.shop.getProfile>[0];
 
   // Dapatkan access token otomatis (tanpa manual dari user):
   // prefer refresh_token → exchangeCode (code) → fallback env ACCESS_TOKEN.
@@ -99,18 +99,18 @@ async function main(): Promise<void> {
 
   // --- JALUR GATEWAY + kontrak ---
   console.log('\n[gateway] getShop …');
-  const shop = await plugin.gateway.getShop(ctx);
+  const shop = await plugin.gateway.shop.getProfile(ctx);
   console.log('  shop:', shop);
 
   console.log('\n[gateway] pullOrders (7 hari terakhir) …');
-  const orders = await plugin.gateway.pullOrders(ctx);
+  const orders = await plugin.gateway.order.pull(ctx);
   console.log(`  ${orders.length} order`);
   for (const o of orders.slice(0, 3)) {
     console.log('   -', o.platformOrderId, '|', o.status, '|', o.currency, o.totalAmount?.amount);
   }
 
   console.log('\n[gateway] pullProducts …');
-  const products = await plugin.gateway.pullProducts(ctx);
+  const products = await plugin.gateway.product.pull(ctx);
   console.log(`  ${products.length} product`);
   for (const p of products.slice(0, 3)) {
     console.log('   -', p.name, '|', p.sku ?? '', '|', p.variants?.length, 'varian');

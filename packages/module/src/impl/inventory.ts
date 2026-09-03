@@ -99,7 +99,7 @@ export function inventoryModule(deps: ModuleDeps): InventoryModuleImpl {
         const plugin = registry.get(channel.platform);
         const context = await channelContext(deps, storeId, channel.platform);
         const payload = items.map((i) => ({ sku: i.sku, stock: i.stock.available, warehouseId: i.warehouseId }));
-        await plugin.gateway.syncInventory(context, payload);
+        await plugin.gateway.inventory.sync(context, payload);
         synced += 1;
       }
       await deps.events?.emit('inventory.synced', { storeId, channels: synced, items: items.length });

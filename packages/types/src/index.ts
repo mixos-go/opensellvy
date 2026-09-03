@@ -16,3 +16,4 @@ export * from './domain/user';
 export * from './domain/store';
 export * from './domain/channel';
 export * from './domain/audit';
+export * from './domain/platform';

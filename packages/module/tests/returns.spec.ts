@@ -3,7 +3,7 @@ import { makeHome, makeConnectedStore, makeOrder } from './helpers';
 
 describe('returns — siklus proses return order', () => {
   it('create → transition → notifyPlatform (adapter menerima aksi)', async () => {
-    const actions: Array<{ orderId: string; action: string }> = [];
+    const actions: Array<{ returnId: string; action: string }> = [];
     const h = makeHome();
     h.register({
       orders: [],
@@ -32,7 +32,7 @@ describe('returns — siklus proses return order', () => {
     expect(approved.status).toBe('approved');
 
     await services.returns.notifyPlatform(created.id, storeId, 'receive');
-    expect(actions).toEqual([{ orderId: order.id, action: 'receive' }]);
+    expect(actions).toEqual([{ returnId: created.id, action: 'receive' }]);
 
     const byOrder = await services.returns.listByOrder(order.id);
     expect(byOrder.map((r) => r.id)).toContain(created.id);

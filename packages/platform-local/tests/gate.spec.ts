@@ -132,6 +132,7 @@ describe('one-gate end-to-end dengan adapter LOCAL (tanpa platform API)', () => 
       reason: 'defective',
       note: 'screening retak',
     });
+    store.setReturn(request);
 
     await services.returns.notifyPlatform(request.id, 'store-1', 'refund');
 

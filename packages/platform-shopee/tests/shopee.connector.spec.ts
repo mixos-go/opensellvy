@@ -40,7 +40,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
         response: { shop_id: 14701711, shop_name: 'Toko Andi', region: 'ID' },
       })),
     });
-    const shop = await plugin.gateway.getShop(context() as never);
+    const shop = await plugin.gateway.shop.getProfile(context() as never);
     expect(shop.platformShopId).toBe('14701711');
     expect(shop.shopName).toBe('Toko Andi');
     expect(shop.marketplace).toBe('ID');
@@ -59,7 +59,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
         return { error: '', response: { order_list: [{ order_sn: 'ORD1' }], more: false } };
       }),
     });
-    const orders = await plugin.gateway.pullOrders(context() as never);
+    const orders = await plugin.gateway.order.pull(context() as never);
     expect(orders).toHaveLength(1);
     expect(orders[0].platformOrderId).toBe('ORD1');
     expect(orders[0].status).toBe('awaiting_fulfillment');
@@ -73,7 +73,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
         response: { order_list: [{ order_sn: 'OLD', create_time: 1600000000 }] },
       })),
     });
-    const orders = await plugin.gateway.pullOrders(context() as never, { since: new Date('2023-01-01') });
+    const orders = await plugin.gateway.order.pull(context() as never, { since: new Date('2023-01-01') });
     expect(orders).toHaveLength(0);
   });
 
@@ -100,7 +100,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
         return { error: '', response: { item: [{ item_id: 555 }], total_count: 1 } };
       }),
     });
-    const products = await plugin.gateway.pullProducts(context() as never);
+    const products = await plugin.gateway.product.pull(context() as never);
     expect(products).toHaveLength(1);
     expect(products[0].name).toBe('Sendal');
     expect(products[0].variants[0].stock).toBe(4);
@@ -115,7 +115,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
         return { error: '', response: {} as Record<string, unknown>, request_id: 'r' };
       }),
     });
-    await plugin.gateway.syncInventory(
+    await plugin.gateway.inventory.sync(
       context() as never,
       [{ sku: 'SKU-1', stock: 3 }],
     );
@@ -127,7 +127,7 @@ describe('Shopee connector gateway (stub fetch)', () => {
       now: () => TS,
       fetch: route(() => ({ error: 'access_token_value_expired', message: 'token expired', request_id: 'x' })),
     });
-    await expect(plugin.gateway.getShop(context() as never)).rejects.toMatchObject({ name: 'ShopeeApiError', code: 'access_token_value_expired' });
+    await expect(plugin.gateway.shop.getProfile(context() as never)).rejects.toMatchObject({ name: 'ShopeeApiError', code: 'access_token_value_expired' });
   });
 });
 
@@ -190,7 +190,7 @@ describe('Shopee OAuth persist + auto-refresh (TokenStore)', () => {
         return { error: '', response: { shop_id: 14701711, shop_name: 'Toko', region: 'ID' } };
       }),
     });
-    await plugin.gateway.getShop(context() as never);
+    await plugin.gateway.shop.getProfile(context() as never);
     expect(refreshCalls).toBe(1);
     expect((store.current as { accessToken: string }).accessToken).toBe('at-fresh');
   });
@@ -202,7 +202,7 @@ describe('Shopee OAuth persist + auto-refresh (TokenStore)', () => {
       shopId: SHOP,
       fetch: route(() => ({ error: '', response: { shop_id: 14701711, shop_name: 'T', region: 'ID' } })),
     });
-    const shop = await plugin.gateway.getShop(context() as never);
+    const shop = await plugin.gateway.shop.getProfile(context() as never);
     expect(shop.shopName).toBe('T');
   });
 });

@@ -113,99 +113,262 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
     },
   };
 
+  async function shopAcc(context: ConnectorContext): Promise<{ accessToken: string; shopId?: string }> {
+    const token = await validToken(context);
+    const shopId = context.credentials.shopId ?? options.shopId;
+    return { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
+  }
+
+  function notImplemented(name: string): never {
+    throw new Error(`Shopee gateway ${name} belum diimplementasikan`);
+  }
+
   const gateway: PlatformPlugin['gateway'] = {
-    async getShop(context) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const info = await client.request<{ shop_id?: string | number; shop_name?: string; region?: string }>(
-        { apiType: 'shop', path: '/api/v2/shop/get_shop_info', method: 'GET' },
-        { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) },
-      );
-      return {
-        platformShopId: info.shop_id !== undefined ? String(info.shop_id) : shopId ?? '',
-        shopName: info.shop_name ?? '',
-        marketplace: info.region ?? '',
-      };
+    shop: {
+      async getProfile(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const info = await client.request<{ shop_id?: string | number; shop_name?: string; region?: string }>(
+          { apiType: 'shop', path: '/api/v2/shop/get_shop_info', method: 'GET' },
+          acc,
+        );
+        return {
+          platformShopId: info.shop_id !== undefined ? String(info.shop_id) : acc.shopId ?? '',
+          shopName: info.shop_name ?? '',
+          marketplace: info.region ?? '',
+        };
+      },
+      async updateProfile(context, patch) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const body: Record<string, unknown> = {};
+        if (patch.shopName !== undefined) body.shop_name = patch.shopName;
+        if (patch.description !== undefined) body.description = patch.description;
+        if (Object.keys(body).length > 0) {
+          await client.request(
+            { apiType: 'shop', path: '/api/v2/shop/update_shop_info', method: 'POST', params: body },
+            acc,
+          );
+        }
+      },
     },
 
-    async pullOrders(context, opts) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      const list = await client.request<{ order_list?: Array<{ order_sn?: string }>; more?: boolean }>(
-        {
-          apiType: 'shop',
-          path: '/api/v2/order/get_order_list',
-          method: 'GET',
-          params: {
-            time_range_field: 'create_time',
-            time_from: opts?.since ? opts.since.getTime() / 1000 : Math.floor(Date.now() / 1000) - 7 * 86400,
-            time_to: Math.floor(Date.now() / 1000),
-            page_size: 100,
+    order: {
+      async pull(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const list = await client.request<{ order_list?: Array<{ order_sn?: string }>; more?: boolean }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/order/get_order_list',
+            method: 'GET',
+            params: {
+              time_range_field: 'create_time',
+              time_from: opts?.since ? opts.since.getTime() / 1000 : Math.floor(Date.now() / 1000) - 7 * 86400,
+              time_to: Math.floor(Date.now() / 1000),
+              page_size: 100,
+            },
           },
-        },
-        acc,
-      );
-      const ids = (list.order_list ?? []).map((o) => o.order_sn).filter((x): x is string => !!x);
-      if (ids.length === 0) return [];
-      const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
-        { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: ids.join(',') } },
-        acc,
-      );
-      const orderList = detail.order_list ?? [];
-      if (orderList.length === 0) return [];
-      const domain = mapOrder(context.storeId, context.platformAccountId, 'shopee', orderList[0]!);
-      if (opts?.since && domain.createdAt && new Date(domain.createdAt).getTime() < opts.since.getTime()) {
-        return [];
-      }
-      return [domain];
-    },
-
-    async getOrder(context, platformOrderId) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
-        { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: platformOrderId } },
-        acc,
-      );
-      return mapOrder(
-        context.storeId,
-        context.platformAccountId,
-        'shopee',
-        detail.order_list?.[0] ?? ({ order_sn: platformOrderId } as ShopeeOrderDetail),
-      );
-    },
-
-    async pushOrder(_context, _order) {
-      // Shopee tidak punya "buat pesanan" dari sisi seller; order selalu masuk via pull.
-      return;
-    },
-
-    async updateOrder(context, orderId, patch) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      const status = patch.status;
-      if (status === 'cancel' || /cancel/i.test(String(status ?? ''))) {
-        await client.request(
-          { apiType: 'shop', path: '/api/v2/order/update_order_status', method: 'POST', params: { order_sn: orderId, order_status: 'CANCELLED' } },
           acc,
         );
-        return;
-      }
-      if (status === 'accept') {
-        await client.request(
-          { apiType: 'shop', path: '/api/v2/order/update_order_status', method: 'POST', params: { order_sn: orderId, order_status: 'READY_TO_SHIP' } },
+        const ids = (list.order_list ?? []).map((o) => o.order_sn).filter((x): x is string => !!x);
+        if (ids.length === 0) return [];
+        const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
+          { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: ids.join(',') } },
           acc,
         );
+        const orderList = detail.order_list ?? [];
+        return orderList
+          .map((raw) => mapOrder(context.storeId, context.platformAccountId, 'shopee', raw))
+          .filter((o) => (opts?.since ? new Date(o.createdAt).getTime() >= opts.since.getTime() : true));
+      },
+      async get(context, platformOrderId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const detail = await client.request<{ order_list?: ShopeeOrderDetail[] }>(
+          { apiType: 'shop', path: '/api/v2/order/get_order_detail', method: 'GET', params: { order_sn_list: platformOrderId } },
+          acc,
+        );
+        return mapOrder(
+          context.storeId,
+          context.platformAccountId,
+          'shopee',
+          detail.order_list?.[0] ?? ({ order_sn: platformOrderId } as ShopeeOrderDetail),
+        );
+      },
+      async push(_context, _order) {
+        // Shopee tidak punya "buat pesanan" dari sisi seller; order selalu masuk via pull.
         return;
-      }
-      if (patch.trackingNumber || (status && /ship|fulfill/i.test(String(status)))) {
+      },
+      async update(context, orderId, patch) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const status = patch.status;
+        if (status === 'cancel' || /cancel/i.test(String(status ?? ''))) {
+          await client.request(
+            { apiType: 'shop', path: '/api/v2/order/update_order_status', method: 'POST', params: { order_sn: orderId, order_status: 'CANCELLED' } },
+            acc,
+          );
+          return;
+        }
+        if (status === 'accept') {
+          await client.request(
+            { apiType: 'shop', path: '/api/v2/order/update_order_status', method: 'POST', params: { order_sn: orderId, order_status: 'READY_TO_SHIP' } },
+            acc,
+          );
+          return;
+        }
+        if (patch.trackingNumber || (status && /ship|fulfill/i.test(String(status)))) {
+          await client.request(
+            {
+              apiType: 'shop',
+              path: '/api/v2/logistics/ship_order',
+              method: 'POST',
+              params: {
+                order_sn: orderId,
+                package_list: [
+                  {
+                    logistics_channel_id: Number(patch.courier || '') || 0,
+                    tracking_number: patch.trackingNumber ?? '',
+                  },
+                ],
+              },
+            },
+            acc,
+          );
+        }
+      },
+      async track(context, orderId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const detail = await client.request<{ package_list?: Array<{ status?: string; update_time?: number }> }>(
+          { apiType: 'shop', path: '/api/v2/logistics/get_logistics_detail', method: 'GET', params: { order_sn: orderId } },
+          acc,
+        );
+        return (detail.package_list ?? []).map((p) => ({
+          status: p.status ?? 'in_transit',
+          description: p.status ?? '',
+          occurredAt: new Date((p.update_time ?? 0) * 1000).toISOString(),
+        }));
+      },
+    },
+
+    product: {
+      async pull(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const list = await client.request<{ item?: Array<{ item_id?: number | string }>; total_count?: number }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/product/get_item_list',
+            method: 'GET',
+            params: { offset: opts?.offset ?? 0, page_size: opts?.limit ?? 100, item_status: ['NORMAL'] },
+          },
+          acc,
+        );
+        const ids = (list.item ?? []).map((i) => i.item_id).filter((x): x is string | number => x !== undefined);
+        if (ids.length === 0) return [];
+        const detail = await client.request<{ item_list?: ShopeeItemInfo[] }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/product/get_item_base_info',
+            method: 'GET',
+            params: { item_id_list: ids.map(String).join(','), need_tax_info: true },
+          },
+          acc,
+        );
+        return (detail.item_list ?? []).map((it) => mapProduct(context.storeId, it));
+      },
+      async push(context, product) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const items = Array.isArray(product) ? product : [product];
+        for (const p of items) {
+          const body = {
+            item_name: p.name,
+            description: p.description,
+            images: p.images.map((i) => ({ image: i.url })),
+            item_sku: p.variants[0]?.sku ?? p.name,
+            price: p.variants[0]?.price.amount ?? 0,
+            stock: p.variants[0]?.stock ?? 0,
+            category_id: Number(p.categoryIds[0] ?? '') || 0,
+            weight: '1',
+            dimensions: {},
+            tier_variation: [],
+          };
+          await client.request(
+            { apiType: 'shop', path: '/api/v2/product/add_item', method: 'POST', params: body as unknown as Record<string, unknown> },
+            acc,
+          );
+        }
+      },
+      async update(context, productId, patch) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const body: Record<string, unknown> = { item_id: productId };
+        if (patch.name !== undefined) body.item_name = patch.name;
+        if (patch.description !== undefined) body.description = patch.description;
+        if (patch.price !== undefined) body.price = patch.price as number;
+        if (patch.stock !== undefined) body.stock = patch.stock as number;
+        await client.request(
+          { apiType: 'shop', path: '/api/v2/product/update_item', method: 'POST', params: body },
+          acc,
+        );
+      },
+      async listCategories(context, parentId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ category_list?: Array<{ category_id?: number | string; category_name?: string; has_children?: boolean; parent_id?: number | string }> }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/product/get_category',
+            method: 'GET',
+            params: parentId ? { parent_id: parentId } : {},
+          },
+          acc,
+        );
+        return (res.category_list ?? []).map((c) => ({
+          id: String(c.category_id ?? ''),
+          platform: 'shopee',
+          ...(c.parent_id !== undefined ? { parentId: String(c.parent_id) } : {}),
+          name: c.category_name ?? '',
+          level: 1,
+          hasChildren: c.has_children ?? false,
+        }));
+      },
+    },
+
+    inventory: {
+      async getStockLevels(_context, _skus) {
+        notImplemented('inventory.getStockLevels');
+      },
+      async sync(context, items) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        for (const item of items) {
+          await client.request(
+            {
+              apiType: 'shop',
+              path: '/api/v2/product/update_stock',
+              method: 'POST',
+              params: {
+                item_id: item.sku,
+                stock_list: [{ model_id: item.sku, stock: item.stock }],
+              },
+            },
+            acc,
+          );
+        }
+      },
+      async adjust(_context, _adjustments) {
+        notImplemented('inventory.adjust');
+      },
+    },
+
+    fulfillment: {
+      async ship(context, orderId, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
         await client.request(
           {
             apiType: 'shop',
@@ -215,102 +378,144 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
               order_sn: orderId,
               package_list: [
                 {
-                  logistics_channel_id: Number(patch.courier || '') || 0,
-                  tracking_number: patch.trackingNumber ?? '',
+                  logistics_channel_id: Number(opts.courier || '') || 0,
+                  tracking_number: opts.trackingNumber ?? '',
                 },
               ],
             },
           },
           acc,
         );
-      }
-    },
-
-    async pullProducts(context) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      const list = await client.request<{ item?: Array<{ item_id?: number | string }>; total_count?: number }>(
-        { apiType: 'shop', path: '/api/v2/product/get_item_list', method: 'GET', params: { offset: 0, page_size: 100, item_status: ['NORMAL'] } },
-        acc,
-      );
-      const ids = (list.item ?? []).map((i) => i.item_id).filter((x): x is string | number => x !== undefined);
-      if (ids.length === 0) return [];
-      const detail = await client.request<{ item_list?: ShopeeItemInfo[] }>(
-        {
-          apiType: 'shop',
-          path: '/api/v2/product/get_item_base_info',
-          method: 'GET',
-          params: { item_id_list: ids.map(String).join(','), need_tax_info: true },
-        },
-        acc,
-      );
-      return (detail.item_list ?? []).map((it) => mapProduct(context.storeId, it));
-    },
-
-    async pushProduct(context, product) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      const body = {
-        item_name: product.name,
-        description: product.description,
-        images: product.images.map((i) => ({ image: i.url })),
-        item_sku: product.variants[0]?.sku ?? product.name,
-        price: product.variants[0]?.price.amount ?? 0,
-        stock: product.variants[0]?.stock ?? 0,
-        category_id: Number(product.categoryIds[0] ?? '') || 0,
-        weight: '1',
-        dimensions: {},
-        tier_variation: [],
-      };
-      await client.request(
-        { apiType: 'shop', path: '/api/v2/product/add_item', method: 'POST', params: body as unknown as Record<string, unknown> },
-        acc,
-      );
-    },
-
-    async pushProducts(context, products) {
-      for (const p of products) await gateway.pushProduct(context, p);
-    },
-
-    async syncInventory(context, items) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      for (const item of items) {
+      },
+      async updateStatus(context, orderId, status) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
         await client.request(
           {
             apiType: 'shop',
-            path: '/api/v2/product/update_stock',
+            path: '/api/v2/order/update_order_status',
             method: 'POST',
-            params: {
-              item_id: item.sku,
-              stock_list: [{ model_id: item.sku, stock: item.stock }],
-            },
+            params: { order_sn: orderId, order_status: status },
           },
           acc,
         );
-      }
+      },
     },
 
-    async manageReturn(context, request, action) {
-      const client = clientFor(context.credentials);
-      const token = await validToken(context);
-      const shopId = context.credentials.shopId ?? options.shopId;
-      const acc = { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
-      const path =
-        action === 'approve'
-          ? '/api/v2/returns/confirm'
-          : action === 'reject'
-            ? '/api/v2/returns/refund'
-            : action === 'refund'
+    returns: {
+      async list(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ return_list?: Array<{ return_sn?: string; status?: string; order_sn?: string }> }>(
+          { apiType: 'shop', path: '/api/v2/returns/get_return_list', method: 'GET', params: {} },
+          acc,
+        );
+        return (res.return_list ?? []).map((r) =>
+          mapReturn(context.platformAccountId, r.order_sn ?? '', { return_sn: r.return_sn, status: r.status }),
+        );
+      },
+      async get(context, returnId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ return_detail?: { return_sn?: string; status?: string; order_sn?: string } }>(
+          { apiType: 'shop', path: '/api/v2/returns/get_return_detail', method: 'GET', params: { return_sn: returnId.replace('srn-', '') } },
+          acc,
+        );
+        const d = res.return_detail ?? {};
+        return mapReturn(context.platformAccountId, d.order_sn ?? '', d);
+      },
+      async act(context, returnId, action) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const path =
+          action === 'approve' || action === 'receive'
+            ? '/api/v2/returns/confirm'
+            : action === 'reject' || action === 'refund'
               ? '/api/v2/returns/refund'
-              : '/api/v2/returns/confirm';
-      await client.request({ apiType: 'shop', path, method: 'POST', params: { return_sn: request.id.replace('srn-', '') } }, acc);
+              : notImplemented(`returns.act:${action}`);
+        await client.request(
+          {
+            apiType: 'shop',
+            path,
+            method: 'POST',
+            params: { return_sn: returnId.replace('srn-', '') },
+          },
+          acc,
+        );
+      },
+    },
+
+    shipping: {
+      async getRates(context, _request) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ logistics_channel_list?: Array<{ logistics_channel_id?: string; logistics_channel_name?: string }> }>(
+          { apiType: 'shop', path: '/api/v2/logistics/get_logistics_channel_list', method: 'GET', params: {} },
+          acc,
+        );
+        return (res.logistics_channel_list ?? []).map((c) => ({
+          courier: 'custom',
+          service: c.logistics_channel_name ?? '',
+          cost: { amount: 0, currency: 'IDR' },
+        }));
+      },
+      async listShipments() {
+        return notImplemented('shipping.listShipments');
+      },
+      async getShipment() {
+        return notImplemented('shipping.getShipment');
+      },
+    },
+
+    payment: {
+      async list() {
+        notImplemented('payment.list');
+      },
+      async get() {
+        notImplemented('payment.get');
+      },
+      async refund() {
+        notImplemented('payment.refund');
+      },
+    },
+
+    promotion: {
+      async list() {
+        notImplemented('promotion.list');
+      },
+      async get() {
+        notImplemented('promotion.get');
+      },
+      async create(context, promotion) {
+        return Promise.resolve(promotion);
+      },
+      async update() {
+        notImplemented('promotion.update');
+      },
+      async setActive() {
+        notImplemented('promotion.setActive');
+      },
+    },
+
+    media: {
+      async upload() {
+        notImplemented('media.upload');
+      },
+      async list() {
+        notImplemented('media.list');
+      },
+    },
+
+    merchant: {
+      async getProfile(context) {
+        return {
+          id: 'merchant-shopee',
+          platform: 'shopee',
+          name: context.credentials.appId,
+          status: 'active',
+          shops: [context.credentials.shopId ?? ''],
+        };
+      },
     },
   };
 
@@ -330,6 +535,9 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
       'inventory.sync',
       'return.manage',
       'webhook.receive',
+      'payment.read',
+      'shipping.rate',
+      'category.read',
     ],
     auth,
     gateway,

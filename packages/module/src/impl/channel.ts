@@ -59,7 +59,7 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
         credentials: credentialsResolved,
         token,
       };
-      const shop = await plugin.gateway.getShop(context);
+      const shop = await plugin.gateway.shop.getProfile(context);
 
       const stamp = now();
       const existing = await repos.channels.findByShop(input.platform, shop.platformShopId);

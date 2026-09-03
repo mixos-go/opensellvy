@@ -16,6 +16,45 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-03]` Pos: RESTRUKTURISASI `PlatformGateway` → grouped-by-domain (breaking) — semua hijau ✅ (belum commit)
+
+- **Keputusan user (final):** scale sisi gate ✓ → perluas jadi **platform-agnostic** (bisa dipakai banyak platform, bukan hanya Shopee) ✓ → tambah **semua method sekaligus** (jangan bolak-balik) ✓ → **grouped-by-domain**, masukkan method penuh & detail + yang Shopee-spesifik sekalipun ✓.
+- **Baseline test saat ini:** core 50 · connector 10 · platform-shopee 32 · module 33 ·
+  platform-local 4 · api 10 · opensellvy 2 = **141 test** hijau (db-pg 15 butuh Postgres real — tidak dijalankan).
+  Semua typecheck 0, lint 0, build serial sukses.
+- **KONTAK `@opensellvy/connector` DIUBAH (breaking, sengaja) — `PlatformGateway` tidak lagi flat, sekarang grouped-by-domain:**
+  - `packages/connector/src/base.connector.ts` → **11 domain**: `shop`, `order`, `product`, `inventory`,
+    `fulfillment`, `returns`, `shipping`, `payment`, `promotion`, `media`, `merchant` (method detail,
+    platform-agnostic). `Capability` diperluas (`payment.read`, `shipping.rate`, `category.read`, `media.manage`).
+    Tipe lama (`UnknownOrderPatch`, `ReturnAction` → kini `'approve'|'reject'|'receive'|'refund'|'cancel'`,
+    `PlatformShopProfile`) dipertahankan dalam file. `connector/tests/register.spec.ts` helper `dummyGateway`
+    diupdate ke shape grouped.
+  - Kategori Shopee-spesifik (ads/ams/media/video/dsb) TIDAK masuk kontrak umum — tetap eksklusif via
+    `plugin.api(ctx)` (facade 444). Kategori universal (order/product/logistics/payment/returns/discount/voucher/shop)
+    masuk kontrak generik. **Scale puluhan platform = kontrak bersih + kategori spesifik tetap via api accessor.**
+- **types (`packages/types/src/domain/platform.ts` BARU):** `CategoryReference`, `ShopProfilePatch`, `MediaAsset`,
+  `MerchantProfile`, `Voucher`, `Discount`, `FlashSale`; terdaftar di index.ts.
+- **Pemindahan SEMUA implementer ke grouped:**
+  - `platform-shopee/src/shopee.connector.ts` — gateway grouped penuh (shop/order/product/inventory/fulfillment/
+    returns/shipping real via client.request; payment/promotion/media/merchant → notImplemented/empty),
+    `capabilities` diperluas, `notImplemented(name)` + helper `shopAcc(context)`/`clientFor`. **Typecheck 0.**
+  - `platform-local/src/local.connector.ts` — grouped, perilaku store-backed dipertahankan (4 test hijau).
+  - 3 stub (`platform-{tts-tokopedia,lazada,blibli}`) — grouped gateway not-implemented/empty (typecheck hijau).
+  - `module` — 5 file impl (`channel/product/order/inventory/return.ts`) + tests helper pindah ke grouped (33 test hijau).
+  - `api/tests/api.spec.ts` — `dummy` plugin dipindah ke shape grouped (10 test hijau).
+- **Catatan migrasi:** test/live-e2e/api dummy pakai skema `plugin.gateway.shop.getProfile`, `gateway.order.pull`,
+  `gateway.product.pull`, `gateway.inventory.sync` (BUKAN flat `getShop`/`pullOrders`/`pullProducts`/`syncInventory`).
+  **PENTING:** `module` dan adapter harus di-`build` dulu sebelum test paket dependen (api/module) yang meng-import dari `dist` —
+  `dist` stale memunculkan `Cannot read properties of undefined (reading 'getProfile')`.
+- **Fix lint (unused args):** `inventory.getStockLevels(_context,_skus)`, `inventory.adjust(_context,_adjustments)`,
+  `shipping.getRates(context,_request)`.
+- **Belum commit** (user belum minta). Bukan hanya skala 29 kategori — sekarang kontrak siap scale BANYAK platform.
+- **TODO berikutnya:** verifikasi live ulang via `scripts/live-e2e.ts` (perlu update ke grouped call — sudah dilakukan,
+  `plugin.gateway.shop.getProfile`/`order.pull`/`product.pull`; jalankan dengan env creds + `ACCESS_TOKEN=...624567`),
+  lalu `pnpm check` penuh (termasuk db-pg dgn Postgres real), lalu commit sekali.
+
+Previous entry (still valid, prior state):
+
 ### `[2026-09-03]` Pos: OAuth+TokenStore+auto-refresh + PILOT LIVE GATEWAY Order+Product ✅ (belum commit)
 
 - **Baseline test saat ini:** core 50 · connector 10 · platform-shopee **32** · module 33 ·

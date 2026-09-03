@@ -31,19 +31,64 @@ const dummy: PlatformPlugin = {
     refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {
-    getShop: () => Promise.resolve(baseShop),
-    pullOrders: () => Promise.resolve([...seeded.values()]),
-    getOrder: (_c, id) => {
-      const found = [...seeded.values()].find((o) => o.platformOrderId === id);
-      return found ? Promise.resolve(found) : Promise.reject(new Error('not found'));
+    shop: {
+      getProfile: () => Promise.resolve(baseShop),
+      updateProfile: () => Promise.resolve(),
     },
-    pushOrder: () => Promise.resolve(),
-    updateOrder: () => Promise.resolve(),
-    pullProducts: () => Promise.resolve([]),
-    pushProduct: () => Promise.resolve(),
-    pushProducts: () => Promise.resolve(),
-    syncInventory: () => Promise.resolve(),
-    manageReturn: () => Promise.resolve(),
+    order: {
+      pull: () => Promise.resolve([...seeded.values()]),
+      get: (_c, id) => {
+        const found = [...seeded.values()].find((o) => o.platformOrderId === id);
+        return found ? Promise.resolve(found) : Promise.reject(new Error('not found'));
+      },
+      push: () => Promise.resolve(),
+      update: () => Promise.resolve(),
+      track: () => Promise.resolve([]),
+    },
+    product: {
+      pull: () => Promise.resolve([]),
+      push: () => Promise.resolve(),
+      update: () => Promise.resolve(),
+      listCategories: () => Promise.resolve([]),
+    },
+    inventory: {
+      getStockLevels: () => Promise.resolve([]),
+      sync: () => Promise.resolve(),
+      adjust: () => Promise.resolve(),
+    },
+    fulfillment: {
+      ship: () => Promise.resolve(),
+      updateStatus: () => Promise.resolve(),
+    },
+    returns: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.reject(new Error('not implemented')),
+      act: () => Promise.resolve(),
+    },
+    shipping: {
+      getRates: () => Promise.resolve([]),
+      listShipments: () => Promise.resolve([]),
+      getShipment: () => Promise.reject(new Error('not implemented')),
+    },
+    payment: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.reject(new Error('not implemented')),
+      refund: () => Promise.resolve(),
+    },
+    promotion: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.reject(new Error('not implemented')),
+      create: (_c, p) => Promise.resolve(p),
+      update: () => Promise.resolve(),
+      setActive: () => Promise.resolve(),
+    },
+    media: {
+      upload: () => Promise.reject(new Error('not implemented')),
+      list: () => Promise.resolve([]),
+    },
+    merchant: {
+      getProfile: () => Promise.reject(new Error('not implemented')),
+    },
   },
   webhook: {
     verify: () => Promise.resolve(true),
@@ -139,7 +184,7 @@ describe('order module — satu gate (domain logic tanpa platform hardcode)', ()
     seedOrder('store-1');
     let syncedPayload: Array<{ sku: string; stock: number }> = [];
     const plugin = connectors.get('local');
-    plugin.gateway.syncInventory = (_, items) => {
+    plugin.gateway.inventory.sync = (_, items) => {
       syncedPayload = items as never;
       return Promise.resolve();
     };
@@ -176,8 +221,8 @@ describe('order module — satu gate (domain logic tanpa platform hardcode)', ()
   it('push product ke channel terhubung (adapter menerima UnifiedProduct)', async () => {
     let pushed: UnifiedProduct | undefined;
     const plugin = connectors.get('local');
-    plugin.gateway.pushProduct = (_c, p) => {
-      pushed = p;
+    plugin.gateway.product.push = (_c, p) => {
+      pushed = p as UnifiedProduct;
       return Promise.resolve();
     };
 
@@ -218,7 +263,7 @@ describe('order module — satu gate (domain logic tanpa platform hardcode)', ()
 
     const services = createServices({ deps: { registry: connectors, tokens, credentials: async () => ({ appId: 'a', secret: 's', redirectUri: 'http://cb' }) } });
     let lastToken = '';
-    plugin.gateway.syncInventory = (_c, _items) => {
+    plugin.gateway.inventory.sync = (_c, _items) => {
       lastToken = _c.token.accessToken;
       return Promise.resolve();
     };

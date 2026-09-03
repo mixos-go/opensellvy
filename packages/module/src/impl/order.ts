@@ -110,7 +110,7 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
       try {
         const plugin = registry.get(order.platform);
         const context = await channelContext(deps, order.storeId, order.platform);
-        await plugin.gateway.updateOrder(context, order.platformOrderId, {
+        await plugin.gateway.order.update(context, order.platformOrderId, {
           status,
           ...(update.trackingNumber ? { trackingNumber: update.trackingNumber } : {}),
           ...(update.courier ? { courier: update.courier } : {}),
@@ -144,7 +144,7 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
       for (const channel of channels) {
         const plugin = registry.get(channel.platform);
         const context = await channelContext(deps, storeId, channel.platform);
-        const remote = await plugin.gateway.pullOrders(context, opts);
+        const remote = await plugin.gateway.order.pull(context, opts);
         pulled += remote.length;
 
         for (const incoming of remote) {

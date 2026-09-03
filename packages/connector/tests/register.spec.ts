@@ -1,10 +1,61 @@
 import { describe, expect, it } from 'vitest';
-import {
-  registerPlatform,
-  getPlatform,
-  listPlatforms,
-} from '../src/register';
-import type { PlatformPlugin } from '../src/base.connector';
+import { registerPlatform, getPlatform, listPlatforms } from '../src/register';
+import type { PlatformPlugin, PlatformGateway } from '../src/base.connector';
+
+export const dummyGateway: PlatformGateway = {
+  shop: { getProfile: () => Promise.resolve({ platformShopId: 'shop-1', shopName: 'Dummy', marketplace: 'Dummy' }), updateProfile: () => Promise.resolve() },
+  order: {
+    pull: () => Promise.resolve([]),
+    get: () => Promise.reject(new Error('not implemented')),
+    push: () => Promise.resolve(),
+    update: () => Promise.resolve(),
+    track: () => Promise.resolve([]),
+  },
+  product: {
+    pull: () => Promise.resolve([]),
+    push: () => Promise.resolve(),
+    update: () => Promise.resolve(),
+    listCategories: () => Promise.resolve([]),
+  },
+  inventory: {
+    getStockLevels: () => Promise.resolve([]),
+    sync: () => Promise.resolve(),
+    adjust: () => Promise.resolve(),
+  },
+  fulfillment: {
+    ship: () => Promise.resolve(),
+    updateStatus: () => Promise.resolve(),
+  },
+  returns: {
+    list: () => Promise.resolve([]),
+    get: () => Promise.reject(new Error('not implemented')),
+    act: () => Promise.resolve(),
+  },
+  shipping: {
+    getRates: () => Promise.resolve([]),
+    listShipments: () => Promise.resolve([]),
+    getShipment: () => Promise.reject(new Error('not implemented')),
+  },
+  payment: {
+    list: () => Promise.resolve([]),
+    get: () => Promise.reject(new Error('not implemented')),
+    refund: () => Promise.resolve(),
+  },
+  promotion: {
+    list: () => Promise.resolve([]),
+    get: () => Promise.reject(new Error('not implemented')),
+    create: (c, p) => Promise.resolve(p),
+    update: () => Promise.resolve(),
+    setActive: () => Promise.resolve(),
+  },
+  media: {
+    upload: () => Promise.reject(new Error('not implemented')),
+    list: () => Promise.resolve([]),
+  },
+  merchant: {
+    getProfile: () => Promise.reject(new Error('not implemented')),
+  },
+};
 
 const dummy: PlatformPlugin = {
   platform: 'shopee',
@@ -16,18 +67,7 @@ const dummy: PlatformPlugin = {
     exchangeCode: (_c, _code) => Promise.resolve({ accessToken: '' }),
     refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
-  gateway: {
-    getShop: () => Promise.resolve({ platformShopId: 'shop-1', shopName: 'Dummy Shop', marketplace: 'Dummy' }),
-    pullOrders: () => Promise.resolve([]),
-    getOrder: () => Promise.reject(new Error('not implemented')),
-    pushOrder: () => Promise.resolve(),
-    updateOrder: () => Promise.resolve(),
-    pullProducts: () => Promise.resolve([]),
-    pushProduct: () => Promise.resolve(),
-    pushProducts: () => Promise.resolve(),
-    syncInventory: () => Promise.resolve(),
-    manageReturn: () => Promise.resolve(),
-  },
+  gateway: dummyGateway,
   webhook: {
     verify: () => Promise.resolve(false),
     map: () => Promise.resolve({ type: 'unknown', data: {} }),
@@ -60,7 +100,10 @@ describe('platform registry', () => {
     const other: PlatformPlugin = {
       ...dummy,
       name: 'Dummy v2',
-      gateway: { ...dummy.gateway, getShop: () => Promise.resolve({ platformShopId: 's2', shopName: 'V2', marketplace: 'X' }) },
+      gateway: {
+        ...dummy.gateway,
+        shop: { ...dummy.gateway.shop, getProfile: () => Promise.resolve({ platformShopId: 's2', shopName: 'V2', marketplace: 'X' }) },
+      },
     };
     expect(() => registerPlatform(other, { replace: true })).not.toThrow();
     expect(getPlatform('shopee')).toBe(other);

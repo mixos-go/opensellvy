@@ -50,7 +50,7 @@ export function returnModule(deps: ModuleDeps): ReturnModuleImpl {
       if (!channel) throw new Error(`Channel for return ${returnId} not found`);
       const plugin = registry.get(channel.platform);
       const context = await channelContext(deps, storeId, channel.platform);
-      await plugin.gateway.manageReturn(context, request, action);
+      await plugin.gateway.returns.act(context, returnId, action);
     },
   };
 }

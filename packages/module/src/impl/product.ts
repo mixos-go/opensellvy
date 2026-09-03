@@ -66,7 +66,7 @@ export function productModule(deps: ModuleDeps): ProductModuleImpl {
       if (!channel) throw new Error(`Channel ${platform} not connected for store ${storeId}`);
       const plugin = registry.get(channel.platform);
       const context = await channelContext(deps, storeId, platform);
-      await plugin.gateway.pushProduct(context, product);
+      await plugin.gateway.product.push(context, product);
       await deps.events?.emit('product.pushed', { productId, platform, storeId });
     },
 
@@ -76,7 +76,7 @@ export function productModule(deps: ModuleDeps): ProductModuleImpl {
       for (const channel of channels) {
         const plugin = registry.get(channel.platform);
         const context = await channelContext(deps, storeId, channel.platform);
-        await plugin.gateway.pushProducts(context, items);
+        await plugin.gateway.product.push(context, items);
       }
       await deps.events?.emit('products.pushed', { storeId, count: items.length });
       return { pushed: items.length };
@@ -85,7 +85,7 @@ export function productModule(deps: ModuleDeps): ProductModuleImpl {
     async pull(storeId, platform) {
       const plugin = registry.get(platform);
       const context = await channelContext(deps, storeId, platform);
-      const remote = await plugin.gateway.pullProducts(context);
+      const remote = await plugin.gateway.product.pull(context);
 
       let created = 0;
       let updated = 0;

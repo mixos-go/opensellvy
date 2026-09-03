@@ -21,7 +21,9 @@ interface TokenResponse {
 
 /**
  * OAuth Shopee (Public API): sign base string = partner_id + path + timestamp.
- * Body membawa business params (code/shop_id/refresh_token).
+ * Common params (partner_id, timestamp, sign) di URL; body membawa business params
+ * (code/refresh_token) + partner_id & shop_id sebagai ANGKA (int), karena endpoint
+ * token Shopee memvalidasinya di body.
  */
 export function createShopeeAuth(client: ShopeeClient): ShopeeAuth {
   return {
@@ -39,8 +41,8 @@ export function createShopeeAuth(client: ShopeeClient): ShopeeAuth {
 
     async exchangeCode(code, shopId) {
       const path = '/api/v2/auth/token/get';
-      const body: Record<string, unknown> = { code, partner_id: client.partnerId };
-      if (shopId) body.shop_id = shopId;
+      const body: Record<string, unknown> = { code, partner_id: Number(client.partnerId) };
+      if (shopId) body.shop_id = Number(shopId);
       const res = await client.request<TokenResponse>(
         { apiType: 'public', path, method: 'POST', params: body },
         { apiType: 'public' },
@@ -50,8 +52,8 @@ export function createShopeeAuth(client: ShopeeClient): ShopeeAuth {
 
     async refreshToken(refreshToken, shopId) {
       const path = '/api/v2/auth/access_token/get';
-      const body: Record<string, unknown> = { refresh_token: refreshToken, partner_id: client.partnerId };
-      if (shopId) body.shop_id = shopId;
+      const body: Record<string, unknown> = { refresh_token: refreshToken, partner_id: Number(client.partnerId) };
+      if (shopId) body.shop_id = Number(shopId);
       const res = await client.request<TokenResponse>(
         { apiType: 'public', path, method: 'POST', params: body },
         { apiType: 'public' },

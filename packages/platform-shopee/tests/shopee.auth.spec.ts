@@ -52,7 +52,7 @@ describe('ShopeeAuth OAuth', () => {
     const call = calls[0];
     const u = new URL(call.url);
     expect(u.pathname).toBe('/api/v2/auth/token/get');
-    expect(JSON.parse(call.body)).toMatchObject({ code: 'code123', shop_id: '744', partner_id: PARTNER_ID });
+    expect(JSON.parse(call.body)).toMatchObject({ code: 'code123', shop_id: 744, partner_id: Number(PARTNER_ID) });
     expect(result.accessToken).toBe('at-1');
     expect(result.refreshToken).toBe('rt-1');
     expect(result.shopId).toBe('744');

@@ -11,6 +11,57 @@
 
 ---
 
+## STATE TRACKER (sumber status LIVE — update tiap akhir sesi kerja dengan timestamp)
+
+> Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
+> TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
+
+### `[2026-09-03]` Pos: generator Shopee API (444) — pilot Order+Product hijau (belum commit)
+
+- **Baseline test saat ini:** core 50 · connector 10 · platform-shopee 27 · module 33 ·
+  platform-local 4 · api 10 · db-pg 15 · opensellvy 2 = **151 test** (dari baseline 149;
+  +3 generated.spec, tapi 1 test auth masih merah — lihat catatan).
+- **DIBANGUN (UNCOMMITTED) — generator typed client 444 API Shopee:**
+  - `packages/platform-shopee/scripts/generate-api.ts` — generator TS (parse 444 doc → emit).
+    Output per-kategori: `src/generated/<category>.ts` (class `ShopeeApi<Category>` + `Req_*`/`Res_*`)
+    + `src/generated/index.ts` (interface `ShopeeApi` + `createShopeeApi(client, opts)` facade,
+    29 kategori) + `src/generated/_shared.ts` (ShopeeApiType/ShopeeApiOptions/ShopeeResp).
+  - **Keputusan bentuk (user):** class per kategori + factory `createShopeeApi`.
+  - **Nested response** dibangun pakai **boundary rule** (object/object[] membuka scope anak
+    sampai object/object[] berikutnya) + **dedup nama** di scope yg sama (doc flat TIDAK punya
+    sinyal depth: tanpa indentasi/sedikit depth → reconstruction penuh tak mungkin; user pilih
+    boundary+dedup). Method return `Promise<Res_*>` (ShopeeClient.request sudah unwrap `response`,
+    jadi tipe data langsung, bukan wrapper).
+  - `package.json` → script `generate: tsx scripts/generate-api.ts` + devDep `tsx`.
+  - `src/index.ts` → ekspor `createShopeeApi`, `type ShopeeApi`, `ShopeeResp`, `ShopeeApiOptions`.
+  - `tests/generated.spec.ts` — pilot Order+Product (stub fetch): path/sign/param + facade. **3 hijau.**
+- **Verifikasi:** `pnpm --filter @opensellvy/platform-shopee typecheck` 0 · `build` sukses
+  (dist 218KB) · kontrak `@opensellvy/connector` **TIDAK tersentuh** (satu gate dijaga).
+- **MASIH MERAH (pre-existing, bukan dari generator):** `shopee.auth.spec.ts:55` — ekspektasi
+  `partner_id` mismatch (`2001887` fixture vs sumber `1241483`) pada perubahan auth int-body
+  yg BELUM commit dari sesi sebelumnya. Perlu diselaraskan saat commit auth.
+- **TODO berikutnya:** scale ke 29 kategori sudah dilakukan (semua dihasilkan); next = selaraskan
+  test auth (fix baris 55), lalu hardening §4.1.1 (sebelumnya prioritas ① syncInventory, ② pullOrders).
+
+### `[2026-09-02]` Pos: validasi live sandbox Shopee — POST body int (belum commit)
+
+- **Baseline test:** core 50 · connector 10 · platform-shopee 25 · module 33 · platform-local 4 ·
+  api 10 · db-pg 15 · opensellvy 2 = **149 test hijau**; `pnpm check` 0.
+- **PERUBAHAN BELUM DI-COMMIT:**
+  - `packages/platform-shopee/src/shopee.auth.ts` — endpoint `auth/token/get` &
+    `auth/access_token/get` kini kirim `partner_id`/`shop_id` sebagai **int** di body (public API).
+  - `packages/platform-shopee/tests/shopee.auth.spec.ts` — assertion disesuaikan ke angka.
+  - Validasi live sandbox: POST tembus hingga `error_shop_refresh_token` (bukan error shape/signing)
+    → konfirmasi body `partner_id` int + `shop_id` int benar.
+- **TODO berikutnya (baru, hasil inspeksi kode 2026-09-02):** Shopee adapter masih dasar di beberapa
+  titik → daftar lengkap di **`§4.1.1 Shopee HARDENING`** (syncInventory id mapping, pullOrders
+  multi-order+pagination, updateOrder logistics channel, manageReturn action, webhook, pushProduct).
+  Rencanakan urutan prioritas + breakdown sebelum mulai kode.
+- **Catatan:** access token sandbox berlaku ±4 jam; `get_item_detail` item `845652561` gagal
+  `error_not_found` (quirk sandbox); jangan commit kredensial nyata.
+
+---
+
 ## 1. Foundation
 
 `[x]` Scaffolding monorepo (pnpm workspaces, packages/)
@@ -169,7 +220,36 @@ ke registry. Module & API tak pernah import platform-* langsung.
 `[x]` Inventory sync (product/update_stock)
 `[x]` Return manage (returns confirm/refund)
 `[x]` Webhook receiver (verify via HMAC + map event → domain)
-`[ ]` Kredensial sandbox nyata utk integrasi e2e (kini stub fetch di test)
+
+> **Base adapter sudah ada & hijau (25 test). TAPI sebagian masih dasar/stub — perlu HARDENING
+> sebelum dianggap production-ready. Checklist di bawah berdasar inspeksi kode (2026-09-02).**
+
+### 4.1.1 Shopee HARDENING (belum selesai — dasar/stub)
+- `[~]` **`syncInventory` salah asumsi id** (`shopee.connector.ts:237`) — kirim `item_id: item.sku` &
+      `model_id: item.sku`. Shopee butuh `item_id` (number) + `model_id` benar (item model-level punya
+      `model_id` beda). `sku` ≠ `item_id`/`model_id` → **pasti gagal di sandbox nyata**.
+      Butuh: resolve `item_id` (via `get_item_list`/sku mapping) + `get_model_list` utk `model_id`.
+- `[~]` **`pullOrders` hanya ambil order PERTAMA** (`shopee.connector.ts:126-132`) — `orderList[0]!`
+      lalu `return [domain]`. `get_order_list`+`get_order_detail` bisa balik banyak order →
+      yang lain dibuang. Belum ada **pagination** (`cursor`/`more`/offset) utk list besar.
+- `[ ]` **`updateOrder` ship logic keras & tak diverifikasi** (`shopee.connector.ts:155`) —
+      `logistics_channel_id: Number(patch.courier||'')||0` (0 = bukan channel valid); butuh
+      resolusi channel via `get_logistics_channel` + `init_logistics` sebelum `ship_order`.
+      Status lain (selain cancel/accept/ship) tidak ditangani.
+- `[ ]` **`manageReturn` action→endpoint salah/dangkal** (`shopee.connector.ts:257`) —
+      `reject`→`/returns/refund`, `receive`→`/returns/confirm`; asumsi `request.id.replace('srn-','')`
+      = `return_sn` fragil. Perlu verifikasi endpoint + payload resmi
+      (`returns/confirm`, `returns/reject`, `returns/refund`, `returns/complete`).
+- `[ ]` **Webhook paling minim** (`shopee.webhook.ts`) — dibuat dg `partnerKey:''` & `baseUrl:''`
+      (`shopee.connector.ts:273`) → tak bisa verify nyata; verifier & `map()` belum cocokkan format
+      header/event resmi Open Platform; **tanpa test** (`shopee.webhook.spec.ts` tak ada).
+- `[ ]` **`pushProduct` payload placeholder** (`shopee.connector.ts:211`) — `category_id:0`,
+      `weight:'1'`, `dimensions:{}`, `tier_variation:[]`; belum mapping variant/multi-SKU/attribute.
+- `[ ]` **`getShop`/`getOrder` fallback diam-diam** — fallback ke `entry.shopId ?? ''` / order kosong.
+- `[ ]` **Kredensial sandbox nyata utk integrasi e2e** (kini stub fetch di test; akses token ±4 jam).
+
+> Prioritas usulan: ① syncInventory (id mapping) ② pullOrders multi-order+pagination
+> ③ updateOrder ship (logistics channel) ④ manageReturn ⑤ webhook ⑥ pushProduct.
 
 ### 4.2 TikTok Shop / Tokopedia
 `[ ]` Study API docs (TTS + Tokopedia: merged platform)

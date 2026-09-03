@@ -1,0 +1,4 @@
+interface:
+  display_name: "Shopee OpenAPI Guide"
+  short_description: "Answer Shopee Open Platform API structure questions from bundled references first."
+  default_prompt: "Use $shopee-openapi-guide to confirm this Shopee OpenAPI structure from references/api/ first."

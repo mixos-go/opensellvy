@@ -1,6 +1,6 @@
 import type { CourierCode, ShippingRate, ShippingRateRequest, Shipment, TrackingEvent } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds } from './deps';
+import { buildIds, withChannel } from './deps';
 
 /** port ke aggregator ongkir (biteship/raxio) — impl nyata di layer application. */
 export interface CourierRateProvider {
@@ -11,6 +11,7 @@ export interface ShippingModuleImpl {
   getRates(request: ShippingRateRequest): Promise<ShippingRate[]>;
   addTrackingEvent(orderId: string, event: Omit<TrackingEvent, 'occurredAt'>): Promise<Shipment>;
   track(trackingNumber: string): Promise<Shipment>;
+  getRatesFromPlatform(storeId: string, platform: string, request: ShippingRateRequest): Promise<ShippingRate[]>;
 }
 
 /** profil courier default (tarif flat dasar + per-gram) — cukup utk lokal/non-aggregator. */
@@ -84,6 +85,11 @@ export function shippingModule(deps: ModuleDeps, rates?: CourierRateProvider): S
       const shipment = await repos.shipments.findByTracking(trackingNumber);
       if (!shipment) throw new Error(`Shipment ${trackingNumber} not found`);
       return shipment;
+    },
+
+    async getRatesFromPlatform(storeId, platform, request) {
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.shipping.getRates(ctx, request));
+      return res.ran && res.result ? res.result : [];
     },
   };
 }

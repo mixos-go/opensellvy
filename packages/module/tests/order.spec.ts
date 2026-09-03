@@ -283,4 +283,30 @@ describe('order module — satu gate (domain logic tanpa platform hardcode)', ()
     const persisted = await tokens.get('store-1', 'local');
     expect(persisted.accessToken).toBe('fresh');
   });
+
+  it('trackRemote menarik tracking event dari gateway untuk order lokal', async () => {
+    seedOrder('store-1');
+    const events: Array<{ platformOrderId: string }> = [];
+    const plugin = connectors.get('local');
+    plugin.gateway.order.track = (_c, platformOrderId) => { events.push({ platformOrderId }); return Promise.resolve([{ status: 'in_transit', description: 'Dalam perjalanan', occurredAt: '2026-01-01T00:00:00.000Z' }]); };
+
+    const services = createServices({ deps: { registry: connectors, tokens: memoryTokenStore(), credentials: async () => ({ appId: 'a', secret: 's', redirectUri: 'http://cb' }) } });
+    await services.channels.connect({ storeId: 'store-1', platform: 'local', oauth: { code: 'c' } });
+    await services.orders.sync('store-1');
+    const [order] = (await services.orders.list({ storeId: 'store-1' })).items;
+
+    const result = await services.orders.trackRemote('store-1', 'local', order.id);
+    expect(result[0].description).toBe('Dalam perjalanan');
+    expect(events[0].platformOrderId).toBe(order.platformOrderId);
+  });
+
+  it('getRemote mengambil order dari gateway by platformOrderId', async () => {
+    seedOrder('store-1');
+    const services = createServices({ deps: { registry: connectors, tokens: memoryTokenStore(), credentials: async () => ({ appId: 'a', secret: 's', redirectUri: 'http://cb' }) } });
+    await services.channels.connect({ storeId: 'store-1', platform: 'local', oauth: { code: 'c' } });
+    await services.orders.sync('store-1');
+    const [order] = (await services.orders.list({ storeId: 'store-1' })).items;
+    const remote = await services.orders.getRemote('store-1', 'local', order.platformOrderId);
+    expect(remote?.platformOrderId).toBe(order.platformOrderId);
+  });
 });

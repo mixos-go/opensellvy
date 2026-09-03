@@ -5,9 +5,10 @@ import type {
   OrderStatusUpdate,
   UnifiedOrder,
   Paginated,
+  TrackingEvent,
 } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds, channelContext } from './deps';
+import { buildIds, channelContext, withChannel } from './deps';
 
 const ACTION_TO_STATUS: Record<OrderStatusUpdate['action'], OrderStatus> = {
   accept: 'awaiting_fulfillment',
@@ -51,6 +52,8 @@ export interface OrderModuleImpl {
   /** tarik order dari channel/platform terhubung (idempoten by platformOrderId) */
   sync(storeId: string, platform?: string, opts?: { since?: Date }): Promise<{ pulled: number; created: number; updated: number }>;
   getByOrderNumber(storeId: string, orderNumber: string): Promise<UnifiedOrder>;
+  trackRemote(storeId: string, platform: string, orderId: string): Promise<TrackingEvent[]>;
+  getRemote(storeId: string, platform: string, platformOrderId: string): Promise<UnifiedOrder | undefined>;
 }
 
 export function orderModule(deps: ModuleDeps): OrderModuleImpl {
@@ -171,6 +174,17 @@ export function orderModule(deps: ModuleDeps): OrderModuleImpl {
         }
       }
       return { pulled, created, updated };
+    },
+
+    async trackRemote(storeId, platform, orderId) {
+      const order = await requireOrder(orderId);
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.order.track(ctx, order.platformOrderId));
+      return res.ran && res.result ? res.result : [];
+    },
+
+    async getRemote(storeId, platform, platformOrderId) {
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.order.get(ctx, platformOrderId));
+      return res.ran ? res.result : undefined;
     },
   };
 }

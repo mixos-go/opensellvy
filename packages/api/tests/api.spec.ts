@@ -78,15 +78,41 @@ const dummy: PlatformPlugin = {
 describe('@opensellvy/api — Hono REST server', () => {
   let services: Services;
 
+  let sharedTokens: TokenStore;
+  let testStoreId: string;
+
   beforeAll(async () => {
+    sharedTokens = memoryTokenStore();
     registerPlatform(dummy, { replace: true });
     services = createServices({
       deps: {
         registry: connectors,
-        tokens: memoryTokenStore(),
+        tokens: sharedTokens,
         credentials: async () => ({ appId: 'a', secret: 's', redirectUri: 'http://cb' }),
       },
     });
+    const storeRes = await app().request('/api/stores', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name: 'Toko Platform', slug: 'toko-platform' }),
+    });
+    const created = await storeRes.json();
+    testStoreId = created.item.id as string;
+    await sharedTokens.save(testStoreId, 'local', { accessToken: 'test-token', refreshToken: 'test-refresh' });
+    const productRes = await app().request(`/api/stores/${testStoreId}/products`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        name: 'Test Product',
+        description: 'desc',
+        variants: [{ id: 'v1', sku: 'SKU-TEST', options: {}, price: { amount: 10_000, currency: 'IDR' }, stock: 10 }],
+        images: [],
+        categoryIds: [],
+        attributes: {},
+        status: 'active',
+      }),
+    });
+    expect(productRes.status).toBe(201);
   });
 
   function app(extra?: Partial<ApiContext>): ReturnType<typeof buildApp> {
@@ -316,5 +342,117 @@ describe('@opensellvy/api — Hono REST server', () => {
     });
     expect(noAuth.status).toBe(401);
     expect((await noAuth.json()).error.code).toBe('AUTH_NOT_CONFIGURED');
+  });
+
+  it('platform profile update returns ok', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/profile`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name: 'Updated Shop' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
+  it('platform token refresh returns ok', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/token/refresh`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
+  it('platform payments listForStore returns { gateway, local }', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/payments`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.gateway).toEqual([]);
+    expect(body.local).toEqual([]);
+  });
+
+  it('platform promotion sync returns { result: { pulled: 0 } }', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/promotions/sync`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.result.pulled).toBe(0);
+  });
+
+  it('platform shipping getRatesFromPlatform returns { items: [] }', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/shipping/rates`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        origin: { name: 'A', phone: '0', province: 'J', city: 'J', district: 'D', subDistrict: 'S', postalCode: '123', detail: '' },
+        destination: { name: 'B', phone: '0', province: 'J', city: 'J', district: 'D', subDistrict: 'S', postalCode: '124', detail: '' },
+        items: [{ weightGram: 500, quantity: 1 }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toEqual([]);
+  });
+
+  it('platform order trackRemote without local order returns error', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/orders/nonexistent-id/tracking`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('platform order getRemote without local order → 404', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/orders/remote/nonexistent-platform-order`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('platform product categories returns { items: [] }', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/categories`, { headers: authHeaders() });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toEqual([]);
+  });
+
+  it('platform inventory getStockLevelsRemote returns { items: [] }', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/inventory/levels`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ skus: ['SKU-TEST'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toEqual([]);
+  });
+
+  it('platform inventory adjustRemote returns ok', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/inventory/adjust`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        adjustments: [{ productId: 'p1', warehouseId: 'w1', quantity: 5, reason: 'restock' }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
+  it('platform inventory adjustRemote without adjustments → 400', async () => {
+    const res = await app().request(`/api/stores/${testStoreId}/platforms/local/inventory/adjust`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('VALIDATION_ERROR');
   });
 });

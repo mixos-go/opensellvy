@@ -1,6 +1,6 @@
-import type { ID, InventoryAdjustment, InventoryItem, StockMovement, StockMovementType, UnifiedProduct } from '@opensellvy/types';
+import type { ID, InventoryAdjustment, InventoryItem, StockLevel, StockMovement, StockMovementType, UnifiedProduct } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds, channelContext } from './deps';
+import { buildIds, channelContext, withChannel } from './deps';
 
 export interface InventoryModuleImpl {
   /** status stock by sku (+opsional gudang) */
@@ -15,6 +15,8 @@ export interface InventoryModuleImpl {
   history(sku: string, limit?: number): Promise<StockMovement[]>;
   /** inisialisasi inventory dari product dan materialisasikan sku lokal */
   ensureFromProduct(product: UnifiedProduct, warehouseId: ID): Promise<InventoryItem[]>;
+  getStockLevelsRemote(storeId: string, platform: string, skus: string[]): Promise<StockLevel[]>;
+  adjustRemote(storeId: string, platform: string, adjustments: InventoryAdjustment[]): Promise<void>;
 }
 
 export function inventoryModule(deps: ModuleDeps): InventoryModuleImpl {
@@ -130,6 +132,15 @@ export function inventoryModule(deps: ModuleDeps): InventoryModuleImpl {
         items.push(item);
       }
       return items;
+    },
+
+    async getStockLevelsRemote(storeId, platform, skus) {
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.inventory.getStockLevels(ctx, skus));
+      return res.ran && res.result ? res.result : [];
+    },
+
+    async adjustRemote(storeId, platform, adjustments) {
+      await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.inventory.adjust(ctx, adjustments));
     },
   };
 }

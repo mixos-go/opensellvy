@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Promotion } from '@opensellvy/types';
 import { makeHome, makeConnectedStore } from './helpers';
 
 describe('promotions — validasi kode promosi', () => {
@@ -82,5 +83,49 @@ describe('promotions — validasi kode promosi', () => {
     const h = makeHome();
     const { storeId } = await makeConnectedStore(h);
     await expect(h.services.promotions.validate(storeId, 'TIDAKADA', { amount: 10_000, currency: 'IDR' })).rejects.toThrow('not found');
+  });
+
+  it('syncFromPlatform tarik promosi remote & simpan yang belum ada', async () => {
+    const h = makeHome();
+    const { storeId } = await makeConnectedStore(h);
+    const { connectors } = await import('@opensellvy/connector');
+    const remote: Promotion = {
+      id: 'promo-remote-1', storeId, name: 'Remote Voucher', type: 'voucher', status: 'active', code: 'REMOTE1',
+      startAt: '2026-01-01T00:00:00.000Z', endAt: '2026-12-31T00:00:00.000Z', usageCount: 0,
+      rules: { type: 'fixed', value: 5_000, appliesTo: 'all_items' },
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    connectors.get('local').gateway.promotion.list = () => Promise.resolve([remote]);
+
+    const res = await h.services.promotions.syncFromPlatform(storeId, 'local');
+    expect(res.pulled).toBe(1);
+    const saved = await h.services.promotions.list(storeId);
+    expect(saved.map((p) => p.id)).toContain('promo-remote-1');
+  });
+
+  it('pushToPlatform mengirim promosi lokal ke gateway & mengembalikan hasil', async () => {
+    const h = makeHome();
+    const { storeId } = await makeConnectedStore(h);
+    const { connectors } = await import('@opensellvy/connector');
+    const promo = await h.services.promotions.create({
+      storeId, name: 'Lokal', type: 'voucher', code: 'LOKAL',
+      startAt: '2026-01-01T00:00:00.000Z', endAt: '2026-12-31T00:00:00.000Z',
+      rules: { type: 'fixed', value: 5_000, appliesTo: 'all_items' },
+    });
+    const calls: Promotion[] = [];
+    connectors.get('local').gateway.promotion.create = (_c, p) => { calls.push(p); return Promise.resolve(p); };
+    const result = await h.services.promotions.pushToPlatform(storeId, 'local', promo.id);
+    expect(calls.map((c) => c.id)).toContain(promo.id);
+    expect(result?.id).toBe(promo.id);
+  });
+
+  it('setActiveRemotely meneruskan ke gateway', async () => {
+    const h = makeHome();
+    const { storeId } = await makeConnectedStore(h);
+    const { connectors } = await import('@opensellvy/connector');
+    const calls: Array<{ id: string; active: boolean }> = [];
+    connectors.get('local').gateway.promotion.setActive = (_c, id, active) => { calls.push({ id, active }); return Promise.resolve(); };
+    await h.services.promotions.setActiveRemotely(storeId, 'local', 'promo-x', false);
+    expect(calls).toEqual([{ id: 'promo-x', active: false }]);
   });
 });

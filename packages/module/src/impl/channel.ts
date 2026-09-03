@@ -1,6 +1,6 @@
-import type { ChannelConnection, ConnectChannelInput, ID, PlatformCode } from '@opensellvy/types';
+import type { ChannelConnection, ConnectChannelInput, ID, PlatformCode, ShopProfilePatch } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds, channelContext, requireCredentials, requireToken } from './deps';
+import { buildIds, channelContext, requireCredentials, requireToken, withChannel } from './deps';
 
 export interface ChannelModuleImpl {
   /** mulai OAuth — return authorize URL utk redirect UI */
@@ -10,8 +10,10 @@ export interface ChannelModuleImpl {
   list(storeId: ID): Promise<ChannelConnection[]>;
   disconnect(channelId: ID): Promise<void>;
   refresh(channelId: ID): Promise<ChannelConnection>;
+  refreshToken(storeId: ID, platform: PlatformCode): Promise<void>;
   /** jalankan auto-sync semua channel terhubung (orders+inventory) */
   syncAll(storeId: ID, opts?: { platform?: string; since?: Date }): Promise<{ channels: string[] }>;
+  updateProfile(storeId: ID, platform: PlatformCode, patch: ShopProfilePatch): Promise<void>;
 }
 
 export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
@@ -113,6 +115,20 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
       return requireChannel(channelId);
     },
 
+    async refreshToken(storeId, platform) {
+      const tokens = requireToken(deps);
+      const credentials = requireCredentials(deps);
+      const plugin = registry.get(platform);
+      const current = await tokens.get(storeId, platform);
+      const fresh = await plugin.auth.refreshToken({
+        storeId,
+        platformAccountId: `${storeId}:${platform}`,
+        credentials: await credentials(storeId, platform),
+        token: current ?? { accessToken: '' },
+      });
+      await tokens.save(storeId, platform, fresh);
+    },
+
     async syncAll(storeId, opts) {
       const channels = (await repos.channels.findByStore(storeId)).filter((c) => !opts?.platform || c.platform === opts.platform);
       const results: string[] = [];
@@ -123,6 +139,10 @@ export function channelModule(deps: ModuleDeps): ChannelModuleImpl {
         results.push(channel.platform);
       }
       return { channels: results };
+    },
+
+    async updateProfile(storeId, platform, patch) {
+      await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.shop.updateProfile(ctx, patch));
     },
   };
 }

@@ -20,6 +20,23 @@ import {
   authorizeChannelHandler,
   oauthCallbackHandler,
 } from './controllers/catalog.controller';
+import {
+  updateProfileHandler,
+  refreshTokenHandler,
+  listPaymentsForStoreHandler,
+  getRemotePaymentHandler,
+  refundViaPlatformHandler,
+  syncPromotionsHandler,
+  pushPromotionHandler,
+  setPromotionActiveHandler,
+  getShippingRatesHandler,
+  trackOrderHandler,
+  getRemoteOrderHandler,
+  listCategoriesHandler,
+  pushProductUpdateHandler,
+  getStockLevelsHandler,
+  adjustRemoteInventoryHandler,
+} from './controllers/platform.controller';
 
 /**
  * Router layer — komposisi Hono app dari route + middleware.
@@ -63,6 +80,35 @@ export function buildApp(ctx: ApiContext): Hono<{ Variables: { api: ApiContext; 
   app.get('/api/stores/:storeId/channels', bearerAuth, listChannelsHandler);
   app.get('/api/stores/:storeId/oauth/:platform/authorize', bearerAuth, authorizeChannelHandler);
   app.post('/api/oauth/:platform/callback', oauthCallbackHandler);
+
+  // Platform sync — profile & token
+  app.patch('/api/stores/:storeId/platforms/:platform/profile', bearerAuth, updateProfileHandler);
+  app.post('/api/stores/:storeId/platforms/:platform/token/refresh', bearerAuth, refreshTokenHandler);
+
+  // Platform payments
+  app.get('/api/stores/:storeId/payments', bearerAuth, listPaymentsForStoreHandler);
+  app.get('/api/stores/:storeId/platforms/:platform/payments/:paymentId', bearerAuth, getRemotePaymentHandler);
+  app.post('/api/stores/:storeId/platforms/:platform/payments/:paymentId/refund', bearerAuth, refundViaPlatformHandler);
+
+  // Platform promotions
+  app.post('/api/stores/:storeId/platforms/:platform/promotions/sync', bearerAuth, syncPromotionsHandler);
+  app.post('/api/stores/:storeId/platforms/:platform/promotions/:promotionId/push', bearerAuth, pushPromotionHandler);
+  app.post('/api/stores/:storeId/platforms/:platform/promotions/:promotionId/active', bearerAuth, setPromotionActiveHandler);
+
+  // Platform shipping rates
+  app.post('/api/stores/:storeId/platforms/:platform/shipping/rates', bearerAuth, getShippingRatesHandler);
+
+  // Platform orders
+  app.get('/api/stores/:storeId/platforms/:platform/orders/:orderId/tracking', bearerAuth, trackOrderHandler);
+  app.get('/api/stores/:storeId/platforms/:platform/orders/remote/:platformOrderId', bearerAuth, getRemoteOrderHandler);
+
+  // Platform product categories
+  app.get('/api/stores/:storeId/platforms/:platform/categories', bearerAuth, listCategoriesHandler);
+  app.post('/api/stores/:storeId/platforms/:platform/products/:productId/update', bearerAuth, pushProductUpdateHandler);
+
+  // Platform inventory remote
+  app.post('/api/stores/:storeId/platforms/:platform/inventory/levels', bearerAuth, getStockLevelsHandler);
+  app.post('/api/stores/:storeId/platforms/:platform/inventory/adjust', bearerAuth, adjustRemoteInventoryHandler);
 
   // Webhook receiver — per-platform signature di controller
   app.post('/webhooks/:platform', webhookReceiverHandler);

@@ -16,6 +16,32 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-03]` Pos: API internal di-scale penuh — module platform-sync + REST expose grouped `PlatformGateway` ✅ (belum commit)
+
+- **Konteks (keputusan user):** kontrak gate sudah di-scale (grouped-by-domain). Sekarang API internal (module + REST)
+  dibuat memakai SEMUA method grouped `PlatformGateway`, sehingga (a) kontrak terverifikasi ter-exercise & (b) menjadi
+  **pattern implementasi platform berikutnya** (TikTok/Lazada/Blibli) yang tinggal generate client → mapping → isi gateway.
+- **Module OMS (`@opensellvy/module`, additive, semua push/pull via helper toleran `withChannel`):**
+  - `payment`: `listForStore(storeId, platform?)`, `getRemote(storeId, platform, paymentId)`, `refundViaPlatform(storeId, platform, paymentId, amount)`
+  - `promotion`: `syncFromPlatform(storeId, platform)` → `{pulled}`, `pushToPlatform(storeId, platform, promotionId)`, `setActiveRemotely(storeId, platform, promotionId, active)`
+  - `shipping`: `getRatesFromPlatform(storeId, platform, request)`
+  - `order`: `trackRemote(storeId, platform, orderId)`, `getRemote(storeId, platform, platformOrderId)`
+  - `product`: `listCategories(storeId, platform, parentId?)`, `pushUpdate(storeId, platform, productId, patch)`
+  - `inventory`: `getStockLevelsRemote(storeId, platform, skus)`, `adjustRemote(storeId, platform, adjustments)`
+  - `channel`: `updateProfile(storeId, platform, patch)`, `refreshToken(storeId, platform)`
+  - `fulfillment`: `handover` kini juga dorong `gateway.fulfillment.ship` (ship ke platform, toleran)
+- **REST API (`@opensellvy/api`)** — controller baru `platform.controller.ts` (15 handler) + 15 route
+  (`/api/stores/:storeId/platforms/:platform/...`): profile PATCH, token refresh, payments list/get/refund,
+  promotions sync/push/setActive, shipping rates, order tracking + get remote, categories, product update,
+  inventory levels + adjust. Semua `bearerAuth`, pola Router→Controller→service.
+- **Keputusan yang di-resolve:** `UnifiedProduct` TIDAK punya `platformProductId` → `product.pushUpdate` pakai id lokal.
+  `repos.promotions` TIDAK punya `findById` → `syncFromPlatform` cek via `list(storeId)`. `trackRemote` butuh order lokal
+  (throw 500 bila tak ada); `getRemote` pakai `withChannel` (404 bila tak terhubung).
+- **FIX bug:** `module/src/impl/deps.ts` — deklarasi `refreshAndPersist` ketinggalan saat insert `withChannel` → dipulihkan.
+- **Test hijau (jaket non-db-pg):** core 50 · connector 10 · module **53** · platform-local 4 · platform-shopee 32 ·
+  api **21** · opensellvy 2 = **172** (db-pg 15 butuh Postgres real). Typecheck 0 semua 14 paket, lint 0, build serial sukses.
+- **Belum commit** (user belum minta).
+
 ### `[2026-09-03]` Pos: RESTRUKTURISASI `PlatformGateway` → grouped-by-domain (breaking) — semua hijau ✅ (belum commit)
 
 - **Keputusan user (final):** scale sisi gate ✓ → perluas jadi **platform-agnostic** (bisa dipakai banyak platform, bukan hanya Shopee) ✓ → tambah **semua method sekaligus** (jangan bolak-balik) ✓ → **grouped-by-domain**, masukkan method penuh & detail + yang Shopee-spesifik sekalipun ✓.

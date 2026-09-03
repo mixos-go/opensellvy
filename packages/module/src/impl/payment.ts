@@ -1,11 +1,15 @@
 import type { Payment, PaymentMethod, PaymentStatus } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds } from './deps';
+import { buildIds, withChannel } from './deps';
 
 export interface PaymentModuleImpl {
   capture(orderId: string, method: PaymentMethod, gateway?: string): Promise<Payment>;
   refund(orderId: string, amount: number, reason?: string): Promise<Payment>;
   listByOrder(orderId: string): Promise<Payment[]>;
+  /** tarik payment dari channel platform terhubung */
+  listForStore(storeId: string, platform?: string): Promise<{ gateway: Payment[]; local: Payment[] }>;
+  getRemote(storeId: string, platform: string, paymentId: string): Promise<{ payment?: Payment }>;
+  refundViaPlatform(storeId: string, platform: string, paymentId: string, amount: number): Promise<void>;
 }
 
 export function paymentModule(deps: ModuleDeps): PaymentModuleImpl {
@@ -78,6 +82,32 @@ export function paymentModule(deps: ModuleDeps): PaymentModuleImpl {
 
     async listByOrder(orderId) {
       return repos.payments.findByOrder(orderId);
+    },
+
+    async listForStore(storeId, platform) {
+      const channels = await repos.channels.findByStore(storeId);
+      const targets = platform ? channels.filter((c) => c.platform === platform) : channels;
+      const local: Payment[] = [];
+      for (const channel of targets) {
+        const channelOrders = await repos.orders.find({ storeId, platform: channel.platform });
+        for (const order of channelOrders.items) {
+          local.push(...await repos.payments.findByOrder(order.id));
+        }
+      }
+      const gate = platform ? platform : targets[0]?.platform;
+      const pulled = gate
+        ? await withChannel(deps, storeId, gate, (ctx) => deps.registry.get(gate as never).gateway.payment.list(ctx))
+        : { ran: false as const };
+      return { gateway: pulled.ran && pulled.result ? pulled.result : [], local };
+    },
+
+    async getRemote(storeId, platform, paymentId) {
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.payment.get(ctx, paymentId));
+      return { ...(res.ran && res.result !== undefined ? { payment: res.result } : {}) };
+    },
+
+    async refundViaPlatform(storeId, platform, paymentId, amount) {
+      await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.payment.refund(ctx, paymentId, amount));
     },
   };
 }

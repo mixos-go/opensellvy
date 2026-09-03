@@ -1,6 +1,6 @@
 import type { Promotion, PromotionStatus, PromotionValidation, Money } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds } from './deps';
+import { buildIds, withChannel } from './deps';
 
 export type PromotionCreateInput = Omit<Promotion, 'id' | 'status' | 'usageCount' | 'createdAt' | 'updatedAt'>;
 
@@ -9,6 +9,9 @@ export interface PromotionModuleImpl {
   activate(storeId: string, code: string): Promise<Promotion>;
   validate(storeId: string, code: string, subtotal: Money): Promise<PromotionValidation>;
   list(storeId: string): Promise<Promotion[]>;
+  syncFromPlatform(storeId: string, platform: string): Promise<{ pulled: number }>;
+  pushToPlatform(storeId: string, platform: string, promotionId: string): Promise<Promotion | undefined>;
+  setActiveRemotely(storeId: string, platform: string, promotionId: string, active: boolean): Promise<void>;
 }
 
 export function promotionModule(deps: ModuleDeps): PromotionModuleImpl {
@@ -53,6 +56,32 @@ export function promotionModule(deps: ModuleDeps): PromotionModuleImpl {
 
     async list(storeId) {
       return repos.promotions.list(storeId);
+    },
+
+    async syncFromPlatform(storeId, platform) {
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.promotion.list(ctx));
+      const remote = res.ran && res.result ? res.result : [];
+      const existing = await repos.promotions.list(storeId);
+      const known = new Set(existing.map((p) => p.id));
+      let pulled = 0;
+      for (const promo of remote) {
+        if (!known.has(promo.id)) {
+          await repos.promotions.save(promo);
+          pulled += 1;
+        }
+      }
+      return { pulled };
+    },
+
+    async pushToPlatform(storeId, platform, promotionId) {
+      const promo = (await repos.promotions.list(storeId)).find((p) => p.id === promotionId);
+      if (!promo) throw new Error(`Promotion ${promotionId} not found`);
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.promotion.create(ctx, promo));
+      return res.ran ? res.result : undefined;
+    },
+
+    async setActiveRemotely(storeId, platform, promotionId, active) {
+      await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.promotion.setActive(ctx, promotionId, active));
     },
   };
 }

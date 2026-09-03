@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CourierRateProvider } from '../src';
+import type { ShippingRate, ShippingRateRequest } from '@opensellvy/types';
 import { makeHome, makeConnectedStore } from './helpers';
-
 const REQUEST = {
   origin: {
     name: 'Gudang A',
@@ -60,5 +60,23 @@ describe('shipping — ongkir', () => {
     const rates = await services.shipping.getRates(REQUEST);
     expect(rates).toHaveLength(1);
     expect(rates[0].cost.amount).toBe(25_000);
+  });
+
+  it('getRatesFromPlatform mengambil ongkir dari gateway platform', async () => {
+    const h = makeHome();
+    const { storeId } = await makeConnectedStore(h);
+    const { connectors } = await import('@opensellvy/connector');
+    const remote: ShippingRate = { courier: 'sicepat', service: 'Express', cost: { amount: 30_000, currency: 'IDR' }, estDaysMin: 1, estDaysMax: 2, insuranceAvailable: true };
+    let received: ShippingRateRequest | undefined;
+    connectors.get('local').gateway.shipping.getRates = (_c, req) => { received = req; return Promise.resolve([remote]); };
+    const rates = await h.services.shipping.getRatesFromPlatform(storeId, 'local', REQUEST);
+    expect(received?.destination.city).toBe('Jakarta');
+    expect(rates).toEqual([remote]);
+  });
+
+  it('getRatesFromPlatform toleran: tanpa channel → []', async () => {
+    const h = makeHome();
+    const rates = await h.services.shipping.getRatesFromPlatform('store-nochannel', 'local', REQUEST);
+    expect(rates).toEqual([]);
   });
 });

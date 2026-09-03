@@ -82,6 +82,29 @@ function isTokenExpired(token: { expiresAt?: number }): boolean {
   return Date.now() >= token.expiresAt - REFRESH_MARGIN_MS;
 }
 
+/**
+ * Satu gate DUA ARAH untuk operasi yang butuh channel+token (platform-connected).
+ * Toleran: bila token/tujuan channel tidak lengkap, skip (kirim false) — bukan gagal total,
+ * sehingga module tetap berjalan di mode lokal (tanpa platform).
+ */
+export async function withChannel<T>(
+  deps: ModuleDeps,
+  storeId: ID,
+  platform: string,
+  fn: (context: ConnectorContext) => Promise<T>,
+): Promise<{ context?: ConnectorContext; result?: T; ran: boolean }> {
+  if (!deps.tokens || !deps.credentials) return { ran: false };
+  try {
+    const plugin = deps.registry.get(platform as never);
+    if (!plugin) return { ran: false };
+    const context = await channelContext(deps, storeId, platform);
+    return { context, result: await fn(context), ran: true };
+  } catch (err) {
+    deps.logger?.warn(`[gateway:${platform}] sync gagal (dilewati, mode lokal)`, err);
+    return { ran: false };
+  }
+}
+
 async function refreshAndPersist(
   deps: ModuleDeps,
   plugin: PlatformPlugin,

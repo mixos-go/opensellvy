@@ -1,6 +1,6 @@
 import type { CourierCode, FulfillmentFlow, HandoverPayload, PackPayload, PickPayload, OrderStatus, Shipment } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds } from './deps';
+import { buildIds, channelContext } from './deps';
 import type { InventoryModuleImpl } from './inventory';
 import type { OrderModuleImpl } from './order';
 
@@ -70,6 +70,18 @@ export function fulfillmentModule(deps: ModuleDeps): FulfillmentModuleImpl {
         trackingNumber: payload.trackingNumber,
         courier: payload.courier,
       });
+      // dorong pengiriman ke platform via contrak gateway fulfillment (kalau terhubung)
+      try {
+        const plugin = deps.registry.get(order.platform);
+        const context = await channelContext(deps, order.storeId, order.platform);
+        await plugin.gateway.fulfillment.ship(context, order.platformOrderId, {
+          courier: payload.courier,
+          ...(payload.service !== undefined ? { service: payload.service } : {}),
+          ...(payload.trackingNumber !== undefined ? { trackingNumber: payload.trackingNumber } : {}),
+        });
+      } catch (err) {
+        deps.logger?.warn('fulfillment.ship push-back gagal (status lokal tetap tersimpan)', err);
+      }
 const shipment: Shipment = {
         id: `ship-${payload.orderId}`,
         orderId: payload.orderId,

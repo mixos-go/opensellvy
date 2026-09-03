@@ -1,6 +1,6 @@
-import type { Paginated, PlatformCode, UnifiedProduct } from '@opensellvy/types';
+import type { CategoryReference, Paginated, PlatformCode, UnifiedProduct } from '@opensellvy/types';
 import type { ModuleDeps } from './deps';
-import { buildIds, channelContext } from './deps';
+import { buildIds, channelContext, withChannel } from './deps';
 
 export type ProductCreateInput = Omit<UnifiedProduct, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -17,6 +17,8 @@ export interface ProductModuleImpl {
   pushAll(storeId: string, platform?: PlatformCode): Promise<{ pushed: number }>;
   /** tarik produk dari channel & simpan (upsert by sku) */
   pull(storeId: string, platform: PlatformCode): Promise<{ pulled: number; created: number; updated: number }>;
+  listCategories(storeId: string, platform: PlatformCode, parentId?: string): Promise<CategoryReference[]>;
+  pushUpdate(storeId: string, platform: PlatformCode, productId: string, patch: Record<string, unknown>): Promise<void>;
 }
 
 export function productModule(deps: ModuleDeps): ProductModuleImpl {
@@ -101,6 +103,16 @@ export function productModule(deps: ModuleDeps): ProductModuleImpl {
         }
       }
       return { pulled: remote.length, created, updated };
+    },
+
+    async listCategories(storeId, platform, parentId) {
+      const res = await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.product.listCategories(ctx, parentId));
+      return res.ran && res.result ? res.result : [];
+    },
+
+    async pushUpdate(storeId, platform, productId, patch) {
+      const product = await requireProduct(productId);
+      await withChannel(deps, storeId, platform, (ctx) => deps.registry.get(platform as never).gateway.product.update(ctx, product.id, patch));
     },
   };
 }

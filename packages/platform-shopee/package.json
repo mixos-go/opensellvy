@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
     "generate": "tsx scripts/generate-api.ts",
+    "auth": "tsx auth-flow.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run --passWithNoTests"

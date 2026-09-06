@@ -16,7 +16,7 @@ function client(overrides: Record<string, unknown> = {}) {
   } as never);
 }
 
-function expectedSign(path: string, apiType: 'public' | 'shop', accessToken?: string, shopId?: string): string {
+function expectedSign(path: string, apiType: 'public' | 'shop' | 'merchant', accessToken?: string, shopId?: string): string {
   let base: string;
   if (apiType === 'public') {
     base = `${PARTNER_ID}${path}${TS}`;
@@ -59,12 +59,22 @@ describe('ShopeeClient signing (HMAC-SHA256)', () => {
     // access_token/shop_id tidak boleh mempengaruhi signature public
     expect(c.sign({ apiType: 'public', path }, TS)).toBe(expectedSign(path, 'public'));
   });
+
+  it('merchant sign: partner_id + path + timestamp + access_token + merchant_id', () => {
+    const c = client({
+      credentials: { appId: PARTNER_ID, secret: PARTNER_KEY, redirectUri: 'r', merchantId: '10000010433', merchantToken: 'm-tok' },
+    } as never);
+    const path = '/api/v2/merchant/get_merchant_warehouse_list';
+    expect(c.sign({ apiType: 'merchant', path }, TS, 'm-tok', '10000010433')).toBe(
+      expectedSign(path, 'merchant', 'm-tok', '10000010433'),
+    );
+  });
 });
 
 describe('ShopeeClient HTTP layer', () => {
   it('GET menaruh common params + request params di URL, tanpa body', async () => {
     let capturedUrl = '';
-    let capturedBody = '';
+    const capturedBody = '';
     const c = client({
       fetch: (input: unknown) => {
         capturedUrl = String(input);
@@ -116,7 +126,36 @@ describe('ShopeeClient HTTP layer', () => {
     const url = new URL(capturedUrl);
     expect(url.searchParams.get('partner_id')).toBe(PARTNER_ID);
     expect(url.searchParams.get('sign')).toBe(expectedSign('/api/v2/auth/token/get', 'public'));
+    expect(url.searchParams.has('code')).toBe(false);
     expect(capturedBody).toBe(JSON.stringify({ code: 'the-code' }));
+  });
+
+  it('merchant HTTP layer: merchant_id di common params URL + business di body', async () => {
+    let capturedUrl = '';
+    let capturedBody = '';
+    const c = client({
+      credentials: { appId: PARTNER_ID, secret: PARTNER_KEY, redirectUri: 'r', merchantId: '10000010433', merchantToken: 'm-tok' },
+      fetch: (input: unknown, init?: RequestInit) => {
+        capturedUrl = String(input);
+        capturedBody = String(init?.body ?? '');
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          text: () => Promise.resolve('{"error":"","response":{"warehouse_list":[]}}'),
+        } as Response);
+      },
+    } as never);
+    await c.request<{ warehouse_list: unknown[] }>(
+      { apiType: 'merchant', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+      { apiType: 'merchant', merchantToken: 'm-tok', merchantId: '10000010433' },
+    );
+    const url = new URL(capturedUrl);
+    expect(url.searchParams.get('merchant_id')).toBe('10000010433');
+    expect(url.searchParams.get('access_token')).toBe('m-tok');
+    expect(url.searchParams.has('shop_id')).toBe(false);
+    expect(url.searchParams.get('sign')).toBe(expectedSign('/api/v2/merchant/get_merchant_warehouse_list', 'merchant', 'm-tok', '10000010433'));
+    expect(capturedBody).toBe(JSON.stringify({ warehouse_type: 1, cursor: { page_size: 30 } }));
   });
 
   it('normalisasi error Shopee {error,message} → ShopeeApiError', async () => {

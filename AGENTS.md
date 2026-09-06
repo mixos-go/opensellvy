@@ -229,11 +229,14 @@ Production global: `https://partner.shopeemobile.com` (flexible via `credentials
 ### Signing HMAC-SHA256 (hex, lowercase)
 - **Public API** base string = `partner_id + path + timestamp`
 - **Shop API** base string = `partner_id + path + timestamp + access_token + shop_id`
+- **Merchant API** base string = `partner_id + path + timestamp + access_token + merchant_id`
+  (butuh **merchant-level access token** + `merchant_id` di common params URL — credential
+  `credentials.merchantToken`; BUKAN shop token, lihat fakta verified di bawah).
 - Panjang pasangan: 64 hex chars. Timestamp detik, valid 5 menit.
 
 ### Param & body
-- **GET**: common params (partner_id, timestamp, access_token, shop_id, sign) DI URL + business params di URL.
-- **POST**: common params DI URL, business params DI BODY JSON.
+- **GET**: common params (partner_id, timestamp, access_token, shop_id/sign) DI URL + business params di URL.
+- **POST**: common params (partner_id, timestamp, access_token, shop_id/merchant_id, sign) DI URL, business params DI BODY JSON.
 - Response `{ error, message, response, request_id }` — `error` kosong = sukses.
 
 ### VERIFIED terhadap sandbox nyata (partner_id `1241483`) — jangan diubah tanpa validasi
@@ -245,6 +248,12 @@ Production global: `https://partner.shopeemobile.com` (flexible via `credentials
 - `product/update_stock` (POST) ✅ — item model-level butuh `model_id` yang benar.
 - `auth/token/get` (POST public) ✅ — body WAJIB `partner_id`+`shop_id` sebagai **ANGKA (int)**.
 - `auth/access_token/get` (POST public) ✅ — body WAJIB `partner_id`+`shop_id` int + `refresh_token`.
+- Merchant API (`/api/v2/merchant/*`, mis. `get_merchant_warehouse_list`, `get_shop_list_by_merchant`) —
+  **HANYA bisa dengan merchant-level access token + merchant_sign** (base = `...+access_token+merchant_id`,
+  `merchant_id` di common params URL). Mode yang GAGAL live (verified): shop-sign + merchant_id di query →
+  `error_sign`; merchant-sign + shop token → `invalid_access_token`; merchant_id cuma di body → `error_param`
+  "no merchant_id in query". Token shop kita (exchange `auth/token/get`) punya `merchant_id_list: []` → belum
+  punya merchant token untuk fully verify. Adapter sudah support: `credentials.merchantId` + `credentials.merchantToken`.
 
 ### Status saat ini
 > Detail state LIVE (perubahan belum di-commit, jumlah test, posisi kerja saat ini) WALIB ada

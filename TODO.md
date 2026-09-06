@@ -16,6 +16,62 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-06]` Pos: SDK+enforcement+expand domain COMPLETED & COMMIT `4ea9d39` — Shopee referensi selesai, `pnpm check` penuh hijau 203 test ✅
+
+- **COMMIT `4ea9d39`** telah dibuat (44 files, +1816/−144): `feat(sdk,connector,platform-shopee)` — berisi
+  transform `opensellvy` → `@opensellvy/sdk`, enforcement capability-driven, expand gateway domain universal
+  (finance/merchant/shop), gateway Shopee lengkap, docs. Semua yang sebelumnya "belum commit" kini ter-commit.
+- **Expansi kontrak (dari sesi lalu, kini ter-commit):** `@opensellvy/types` + `FinanceOverview/WalletTransaction/
+  FinanceStatement/Payout/PayoutInfo/FinanceQuery` & `MerchantWarehouse/MerchantShop/ShopSettings`; `PlatformGateway`
+  + domain `finance` (overview/transactions/statement/payoutInfo), `shop` + getSettings/setHolidayMode/listWarehouses,
+  `merchant` + listShops/listWarehouses/listWarehouseLocations; capability `finance.read`/`merchant.read`/`shop.settings`
+  + `CAPABILITY_METHODS`. Module: `finance` service via `withChannel`. API: `finance.controller.ts` + 4 route.
+- **Shopee sebagai referensi — unit test domain baru SELESAI:** `shopee.connector.spec.ts` +11 test
+  (shop.getSettings/setHolidayMode/listWarehouses, finance.overview/transactions/statement/payoutInfo,
+  merchant.listShops/listWarehouses/listWarehouseLocations) → **44 test shopee hijau** (sebelumnya 33).
+  `live-gateway.ts` diperluas +10 check utk domain baru.
+- **Live-verify sandbox:** sesi lalu token `6d7357…` valid → `get_escrow_list`/`promotion.list`/`listShipments` dll
+  200 `[]`, finance/merchant endpoint sukses. **Sekarang token dah EXPIRED** (valid ~4 jam): SEMUA shop-API konsisten
+  HTTP 403 (yang tampak ✅ hanya yg punya fallback try/catch). **Butuh token BARU dari Test Tool console** utk
+  re-verify `finance.overview`, `finance.transactions`, `shop.getSettings` (satu-satunya yg belum terbukti 200).
+- **`pnpm check` PENUH HIJAU (exit 0):** typecheck 14 paket 0 · lint 0 · build serial sukses · test **203 total**:
+  core 50 · connector 10 · module 53 · api 21 · **db-pg 15 (Postgres nyata, migrate otomatis)** · sdk 6 ·
+  platform-local 4 · platform-shopee 44. (db & ui tanpa test file.)
+- **OAuth flow + live-verify TUNTAS (tambahan session):**
+  - **`auth-flow.ts` BARU (script di root package shopee):** generate URL authorize (`redirect=app.example.com/
+    callback`) → tukar code yang di-paste (`auth/token/get`) → simpan token ke `.local/tokens.json` · mode `refresh`
+    (pakai refresh_token). `.local/` masuk `.gitignore` (aman commit). Script npm: `pnpm --filter @opensellvy/
+    platform-shopee auth`.
+  - **`live-gateway.ts` kini auto-load token dari `.local/tokens.json`** + auto-refresh bila expired (tanpa paste token lagi).
+  - **BUG FIX nyata di `shopee.client.ts`:** POST sebelumnya meng-copy `params` ke query string (DAN body) →
+    Shopee balas `error_sign`/`Invalid timestamp` utk `auth/token/get` (verified via raw fetch: body-only = 200,
+    dup-query = error_sign). Kini POST = params HANYA di body JSON (sesuai AGENTS §6), GET tetap di query. Test
+    POST diperkuat (`code` tidak boleh ada di query). **44 test shopee tetap hijau.**
+  - **Live-verify 23/23 tuntas** dgn token valid (sebelumnya 3 pending → kini 200): `shop.getSettings` ✅
+    `{holidayMode:false,...}`, `finance.overview` ✅ `{}`, `finance.transactions` ✅ `[]`. ✅ lain yg sukses: getStockLevels,
+    listShipments, payment.list, promotion.list, media.list, finance.statement/payoutInfo, merchant.*. ⚠️ legitimate
+    (fake ID utk detail): getShipment/tracking, payment.get/refund, promotion.get/update/setActive, returns.act.
+    `shop.listWarehouses` masih `error_param` (butuh `merchant_id` di query) — open item kecil. `inventory.adjust`
+    `.slice` = artefak diagnostic script (repro isolasi `adjust([])` = OK, conformance PASS).
+- **Merchant API + OAuth round-trip (tambahan session):**
+  - **`auth-flow.ts`** (script `auth` pakai `npx tsx auth-flow.ts`): generate URL authorize (`redirect=
+    app.example.com/callback`, TTD 5 menit — generate sesaat sebelum buka) → tukar code → simpan token di
+    `.local/tokens.json` (gitignored, `.local/`). `live-gateway.ts` auto-load + auto-refresh dari refresh_token.
+    ✅ Terbukti live: `auth/token/get` berhasil (access+refresh token dari code).
+  - **BUG FIX `shopee.client.ts`:** POST sebelumnya meng-copy params ke query (DAN body) → Shopee balas
+    `error_sign`. Kini POST = params HANYA di body JSON (AGENTS §6), GET tetap di query. Test POST diperkuat.
+  - **Merchant endpoints (`/api/v2/merchant/*`) perlu merchant-level access token** — verified live: shop-sign
+    + merchant_id di query = `error_sign`; merchant-sign + shop token = `invalid_access_token`; merchant_id di
+    body = `error_param`. Token kita hasil shop-auth punya `merchant_id_list: []`. Solusi ter-implementasi:
+    `PlatformCredentials` + `merchantId` + `merchantToken` (additive), client + apiType `merchant` (base sign
+    `pid+path+ts+access_token+merchant_id`, common params + `merchant_id`), gateway merchant/shop.listWarehouses
+    pakai merchant signing saat kredensial merchant ada, graceful `[]` bila tidak. **46 test shopee** (+2 sign),
+    **`pnpm check` PENUH exit 0, 205 test**.
+  - **Open item:** full live-verify merchant endpoints butuh merchant-level access token (dari app/authorization
+    merchant) — belum tersedia di sandbox test akun ini.
+- **TODO berikutnya:** implementasi platform berikutnya (tts-tokopedia/lazada/blibli) MENGIKUTI pattern shopee
+  (client body-only POST + merchant apiType + mapper + conformance + auth-flow + live-gateway).
+
 ### `[2026-09-03]` Pos: `@opensellvy/sdk` + enforcement capability-driven + gateway Shopee LENGKAP + docs universal ✅ (belum commit)
 
 - **Keputusan user (session ini):**

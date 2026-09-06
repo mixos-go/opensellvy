@@ -9,7 +9,7 @@ const SHOP = '14701711';
 const TS = 1655714431;
 
 function route(handler: (url: URL) => unknown) {
-  return (input: unknown, init?: RequestInit) => {
+  return (input: unknown, _init?: RequestInit) => {
     const url = new URL(String(input));
     const responseBody = handler(url);
     return Promise.resolve({
@@ -25,7 +25,7 @@ function context(extra: Partial<Record<string, unknown>> = {}) {
   return {
     storeId: 's-1',
     platformAccountId: 's-1:shopee',
-    credentials: { appId: PARTNER_ID, secret: PARTNER_KEY, redirectUri: 'r', shopId: SHOP },
+    credentials: { appId: PARTNER_ID, secret: PARTNER_KEY, redirectUri: 'r', shopId: SHOP, merchantId: '1000010433', merchantToken: 'm-at-1' },
     token: { accessToken: ACCESS },
     ...extra,
   };

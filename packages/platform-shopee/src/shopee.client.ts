@@ -4,8 +4,9 @@ import type { PlatformCredentials } from '@opensellvy/connector';
 
 /**
  * Endpoint & parameter bersama Shopee Open API v2.0.
- * - Shop API   base string: partner_id + path + timestamp + access_token + shop_id
- * - Public API base string: partner_id + path + timestamp
+ * - Shop API      base string: partner_id + path + timestamp + access_token + shop_id
+ * - Merchant API  base string: partner_id + path + timestamp + access_token + merchant_id
+ * - Public API    base string: partner_id + path + timestamp
  * Signature = HMAC-SHA256(base string, partner_key) → hex.
  * Lihat: https://open.shopee.com/developer-guide/16
  */
@@ -43,7 +44,7 @@ export interface ShopeeClientOptions {
   timeoutMs?: number;
 }
 
-export type ShopeeApiType = 'public' | 'shop';
+export type ShopeeApiType = 'public' | 'shop' | 'merchant';
 
 export interface ShopeeRequest {
   apiType: ShopeeApiType;
@@ -88,6 +89,14 @@ export class ShopeeClient {
     return this.credentials.secret;
   }
 
+  get merchantId(): string | undefined {
+    return this.credentials.merchantId;
+  }
+
+  get merchantToken(): string | undefined {
+    return this.credentials.merchantToken;
+  }
+
   /** timestamp (detik) saat ini — public agar bisa dipakai ulang untuk signing URL. */
   now(): number {
     return this.nowFn();
@@ -95,14 +104,15 @@ export class ShopeeClient {
 
   /**
    * Hitung base string signature Shopee.
-   * Shop API: `partner_id + path + timestamp + access_token + shop_id`
-   * Public:  `partner_id + path + timestamp`
+   * Shop API:     `partner_id + path + timestamp + access_token + shop_id`
+   * Merchant API: `partner_id + path + timestamp + access_token + merchant_id`
+   * Public:       `partner_id + path + timestamp`
    */
-  buildBaseString(req: Pick<ShopeeRequest, 'apiType' | 'path'>, timestamp: number, accessToken?: string, shopId?: string): string {
+  buildBaseString(req: Pick<ShopeeRequest, 'apiType' | 'path'>, timestamp: number, accessToken?: string, shopOrMerchantId?: string): string {
     if (req.apiType === 'public') {
       return `${this.partnerId}${req.path}${timestamp}`;
     }
-    return `${this.partnerId}${req.path}${timestamp}${accessToken ?? ''}${shopId ?? ''}`;
+    return `${this.partnerId}${req.path}${timestamp}${accessToken ?? ''}${shopOrMerchantId ?? ''}`;
   }
 
   sign(req: Pick<ShopeeRequest, 'apiType' | 'path'>, timestamp: number, accessToken?: string, shopId?: string): string {
@@ -115,32 +125,45 @@ export class ShopeeClient {
     return '/api/v2/shop/auth_partner';
   }
 
-  async request<T>(req: ShopeeRequest, opts: { accessToken?: string; shopId?: string; apiType?: ShopeeApiType } = {}): Promise<T> {
+  async request<T>(req: ShopeeRequest, opts: { accessToken?: string; shopId?: string; merchantToken?: string; merchantId?: string; apiType?: ShopeeApiType } = {}): Promise<T> {
     const timestamp = this.now();
     const apiType = opts.apiType ?? req.apiType;
     const accessToken = opts.accessToken;
     const shopId = opts.shopId ?? this.credentials.shopId;
-    const sign = this.sign(req, timestamp, accessToken, shopId);
+    const merchantToken = opts.merchantToken ?? this.merchantToken;
+    const merchantId = opts.merchantId ?? this.merchantId;
+    const identifier = apiType === 'merchant' ? merchantId : shopId;
+    const token = apiType === 'merchant' ? merchantToken : accessToken;
+    const sign = this.sign(req, timestamp, token, identifier);
 
     const common: Record<string, string> = {
       partner_id: this.partnerId,
       timestamp: String(timestamp),
     };
     if (apiType === 'shop') {
-      if (accessToken) common.access_token = accessToken;
-      if (shopId) common.shop_id = shopId;
+      if (token) common.access_token = token;
+      if (identifier) common.shop_id = identifier;
+    }
+    if (apiType === 'merchant') {
+      if (token) common.access_token = token;
+      if (identifier) common.merchant_id = identifier;
     }
     common.sign = sign;
 
     const query: Record<string, string> = { ...common };
-    for (const [k, v] of Object.entries(req.params ?? {})) query[k] = String(v);
+    let body: Record<string, unknown> | undefined;
+    if (req.method === 'GET') {
+      for (const [k, v] of Object.entries(req.params ?? {})) query[k] = String(v);
+    } else {
+      body = req.params ?? {};
+    }
 
     let response: Awaited<ReturnType<HttpClient['request']>>;
     try {
       if (req.method === 'GET') {
         response = await this.http.get<unknown>(req.path, { query });
       } else {
-        response = await this.http.post<unknown>(req.path, { query, body: req.params ?? {} });
+        response = await this.http.post<unknown>(req.path, { query, body });
       }
     } catch (err) {
       if (err instanceof HttpError) {

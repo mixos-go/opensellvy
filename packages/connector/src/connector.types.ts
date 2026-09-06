@@ -36,6 +36,18 @@ export interface PlatformCredentials {
    * `ConnectorContext.platformAccountId` (ID internal kita).
    */
   shopId?: string;
+  /**
+   * Merchant identifier di sisi platform (mis. merchant_id Shopee) —
+   * dipakai utk merchant-level API (warehouses, shops). Opsional: akun
+   * non-merchant tidak memerlukannya.
+   */
+  merchantId?: string;
+  /**
+   * Access token LEVEL MERCHANT (berbeda dari OAuthToken shop-level) —
+   * opsional, hanya utk platform yang punya API merchant terpisah (mis. Shopee
+   * CB/CNSC: base string sign = partner_id+path+timestamp+access_token+merchant_id).
+   */
+  merchantToken?: string;
 }
 
 export interface ConnectorContext {

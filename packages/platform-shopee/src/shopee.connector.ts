@@ -79,6 +79,27 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
     return new ShopeeClient({ credentials, ...(options.fetch ? { fetch: options.fetch } : {}), ...(options.now ? { now: options.now } : {}) });
   }
 
+  /** Auth (apiType/token/id) utk merchant-level API — undefined bila kredensial merchant belum ada. */
+  function merchantAcc(context: ConnectorContext): { apiType: 'merchant'; merchantToken: string; merchantId: string } | undefined {
+    const { merchantId, merchantToken } = context.credentials;
+    if (merchantId && merchantToken) return { apiType: 'merchant', merchantToken, merchantId };
+    return undefined;
+  }
+
+  interface WarehouseRaw {
+    warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string }; warehouse_type?: number }>;
+  }
+
+  function mapMerchantWarehouses(res: WarehouseRaw): MerchantWarehouse[] {
+    return (res.warehouse_list ?? []).map((w) => ({
+      id: String(w.warehouse_id ?? ''),
+      name: w.warehouse_name ?? '',
+      ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
+      ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
+      status: 'active',
+    }));
+  }
+
   async function loadToken(context: ConnectorContext): Promise<OAuthToken | undefined> {
     const fromDev = options.accessToken ? { accessToken: options.accessToken } : undefined;
     const stored = await tokenStore.get(context.storeId, PLATFORM);
@@ -175,20 +196,17 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
           // Holiday mode endpoint may not be available for all shop types
         }
         let warehouses: MerchantWarehouse[] = [];
-        try {
-          const whRes = await client.request<{ warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string }; warehouse_type?: number }> }>(
-            { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
-            acc,
-          );
-          warehouses = (whRes.warehouse_list ?? []).map((w) => ({
-            id: String(w.warehouse_id ?? ''),
-            name: w.warehouse_name ?? '',
-            ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
-            ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
-            status: 'active',
-          }));
-        } catch {
-          // Merchant warehouse list may not be available for non-merchant accounts
+        const macc = merchantAcc(context);
+        if (macc) {
+          try {
+            const whRes = await client.request<WarehouseRaw>(
+              { apiType: 'merchant', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+              macc,
+            );
+            warehouses = mapMerchantWarehouses(whRes);
+          } catch {
+            // Merchant warehouse list may not be available for non-merchant accounts
+          }
         }
         return {
           platformShopId: String(info.shop_id ?? acc.shopId ?? ''),
@@ -206,18 +224,13 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
       },
       async listWarehouses(context) {
         const client = clientFor(context.credentials);
-        const acc = await shopAcc(context);
-        const res = await client.request<{ warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string }; warehouse_type?: number }> }>(
-          { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
-          acc,
+        const macc = merchantAcc(context);
+        if (!macc) return [];
+        const res = await client.request<WarehouseRaw>(
+          { apiType: 'merchant', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+          macc,
         );
-        return (res.warehouse_list ?? []).map((w) => ({
-          id: String(w.warehouse_id ?? ''),
-          name: w.warehouse_name ?? '',
-          ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
-          ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
-          status: 'active',
-        }));
+        return mapMerchantWarehouses(res);
       },
     },
 
@@ -961,11 +974,12 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
       },
       async listShops(context) {
         const client = clientFor(context.credentials);
-        const acc = await shopAcc(context);
+        const macc = merchantAcc(context);
+        if (!macc) return [];
         try {
           const res = await client.request<{ shop_list?: Array<{ shop_id?: number | string }>; more?: boolean }>(
-            { apiType: 'shop', path: '/api/v2/merchant/get_shop_list_by_merchant', method: 'GET', params: { page_no: 1, page_size: 100 } },
-            acc,
+            { apiType: 'merchant', path: '/api/v2/merchant/get_shop_list_by_merchant', method: 'GET', params: { page_no: 1, page_size: 100 } },
+            macc,
           );
           return (res.shop_list ?? []).map((s): MerchantShop => ({
             shopId: String(s.shop_id ?? ''),
@@ -976,30 +990,26 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
       },
       async listWarehouses(context) {
         const client = clientFor(context.credentials);
-        const acc = await shopAcc(context);
+        const macc = merchantAcc(context);
+        if (!macc) return [];
         try {
-          const res = await client.request<{ warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string } }> }>(
-            { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
-            acc,
+          const res = await client.request<WarehouseRaw>(
+            { apiType: 'merchant', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+            macc,
           );
-          return (res.warehouse_list ?? []).map((w) => ({
-            id: String(w.warehouse_id ?? ''),
-            name: w.warehouse_name ?? '',
-            ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
-            ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
-            status: 'active',
-          }));
+          return mapMerchantWarehouses(res);
         } catch {
           return [];
         }
       },
       async listWarehouseLocations(context, warehouseId) {
         const client = clientFor(context.credentials);
-        const acc = await shopAcc(context);
+        const macc = merchantAcc(context);
+        if (!macc) return [];
         try {
           const res = await client.request<{ response?: Array<{ location_id?: string; warehouse_name?: string }> }>(
-            { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_location_list', method: 'GET', params: {} },
-            acc,
+            { apiType: 'merchant', path: '/api/v2/merchant/get_merchant_warehouse_location_list', method: 'GET', params: { warehouse_id: warehouseId } },
+            macc,
           );
           const locations = Array.isArray(res.response) ? res.response : [];
           return locations.map((l) => ({

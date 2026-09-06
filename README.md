@@ -37,10 +37,10 @@ Dependency rule (tidak boleh dilanggar): core/module TIDAK import `@opensellvy/p
 ```typescript
 import { OpenSellvy } from '@opensellvy/sdk';
 import { registerShopee } from '@opensellvy/platform-shopee';
-import { registerTokopedia } from '@opensellvy/platform-tts-tokopedia';
+import { registerTts } from '@opensellvy/platform-tts-tokopedia';
 
 registerShopee();
-registerTokopedia();
+registerTts();
 
 const oms = new OpenSellvy({ apiKey: '...' });
 const orders = await oms.modules.order.list({ storeId: 'store_123' });

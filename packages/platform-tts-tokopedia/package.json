@@ -1,7 +1,7 @@
 {
   "name": "@opensellvy/platform-tts-tokopedia",
   "version": "0.0.1",
-  "description": "Tokopedia connector plugin",
+  "description": "TikTok Shop connector plugin (platform code: tts-tokopedia)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,7 +16,9 @@
     "build": "tsup src/index.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "auth": "tsx scripts/auth-flow.ts",
+    "live:gateway": "tsx scripts/live-gateway.ts"
   },
   "dependencies": {
     "@opensellvy/types": "workspace:*",

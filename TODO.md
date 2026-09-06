@@ -16,6 +16,78 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-06 #3]` Pos: TTS adapter LIVE-VERIFIED terhadap sandbox TikTok Shop nyata (app key `6kr44ku4st6in`) ✅
+
+- **TERVERIFIKASI LIVE (2026-09-06):** OAuth + gateway pemakai sandbox TikTok Shop nyata. Shop sandbox:
+  id `7494761533788751648`, cipher `ROW_Uq7ryQAAAADpBClD_WS8ZR3BUK2LSSiv`, region ID, seller_type LOCAL,
+  nama `SANDBOX_ID7650204809157461780`. Access+refresh token tersimpan di
+  `packages/platform-tts-tokopedia/.local/tokens.json` (gitignored, jangan di-commit).
+- **PENEMUAN PENTING — flow OAuth generasi lama MATI:** `/authorization/202309/{authorize,token,token/refresh}`
+  di `open-api.tiktokglobalshop.com` → **`36009009 Invalid path`** (verified). Flow SAAT INI (verified live):
+  - Authorize page (browser, TANPA sign, HTTP 200 utk app_key nyata):
+    `https://services.tiktokshop.com/open/authorize?app_key=...&path=<redirect>&state=...`
+  - Token exchange: `GET https://auth.tiktok-shops.com/api/v2/token/get`
+    (`app_key`, `app_secret`, `auth_code`, `grant_type=authorized_code` — persis, bukan authorization_code).
+    Verified: `36004004 invalid auth code` (endpoint valid).
+  - Refresh: `GET https://auth.tiktok-shops.com/api/v2/token/refresh`
+    (`refresh_token`, `grant_type=refresh_token`). Verified: `36004005` (endpoint valid).
+  - `open-api` HANYA utk API bisnis (mis. `GET /authorization/202309/shops` valid, butuh sign;
+    dipakai utk enumerate shop + resolve `shop_cipher`).
+- **Perubahan kode:** `tts.auth.ts` ditulis ulang ke flow baru (no sign di authorize/token); **auto-resolve
+  `shop_cipher`** ditambahkan — `shopCipherOf`: option → credentials ext → token store → fallback
+  `authorization.getAuthorizedShops` (token-level, tanpa cipher) lalu persist ke token store;
+  `shop.getProfile` pindah dari `seller.getActiveShops` (butuh cipher) ke `authorization.getAuthorizedShops`
+  (token-level, tanpa cipher) — sebelumnya gagal `36009004 shop_cipher not required`.
+- **Live gateway result:** getProfile ✅ data nyata; order.pull 0; product.pull 0; returns 0; payment 0
+  (sandbox KOSONG — bukan error); shipping.getRates skip (script butuh `service_id` param). Semua call
+  shop-scoped dieksekusi benar (tandanya cipher auto-resolve jalan).
+- **Test TTS: 34** (tts.connector 14 — getProfile pakai bentuk respons nyata + test auto-resolve cipher
+  sekali-fetch; tts.auth 6 — alamat baru + no-sign + GET; total bertambah dari 32). **`pnpm check` PENUH
+  HIJAU (EXIT=0): typecheck 14 paket · lint 0 · build serial · test 239 total**
+  (core 50 · connector 10 · module 53 · api 21 · db-pg 15 · sdk 6 · local 4 · shopee 46 · TTS 34).
+- Script debug `scripts/fetch-shops.ts` (meng-embed app_secret) DIHAPUS. `scripts/auth-flow.ts` &
+  `live-gateway.ts` tetap (baca kredensial dari `.local/`).
+- **Open item:** sandbox kosong → belum ada data order/product utk uji mapper kaya; aktifkan/lakukan loop
+  tester utk data real bila perlu. `media.list` no-op best-effort. `shipping.getRates` butuh `service_id`.
+  Perlu refresh token ~7 hari (expire_time cek sebelum pakai). Belum di-commit.
+- **TODO berikutnya:** commit area TTS (`feat(platform-tts-tokopedia): OAuth flow terbaru + live-verify
+  sandbox`); lanjut lazada/blibli stub; re-verify merchant Shopee (token expired).
+
+### `[2026-09-06 #2]` Pos: platform TTS-Tokopedia (TikTok Shop) adapter SELESAI — `pnpm check` penuh hijau 237 test ✅
+
+- **Adapter `@opensellvy/platform-tts-tokopedia` IMPLEMENTASI LENGKAP** dari SDK user
+  (repo `mixos-go/tiktok-shop`, vendor ke repo). `tts-tokopedia` = TikTok Shop, `'tts-tokopedia'` masuk `PlatformCode`.
+- **Struktur baru `packages/platform-tts-tokopedia/src/`:** `tts.client.ts` (HMAC-SHA256 signing +
+  common params + `x-tts-access-token` header + envelope normalisasi `TikTokError`, dari SDK user),
+  `tts.auth.ts` (`buildAuthUrl`/`exchangeAuthCode`/`refreshAccessToken`, token access ~7 hari),
+  `tts.types.ts` (kredensial/error/envelope), `tts.mapper.ts` (`mapOrder`/`mapProduct`/`mapReturn`
+  toleran), `tts.webhook.ts` (verify HMAC `X-TTK-SIGN` atas `timestamp+sign` body, timing-safe + map
+  normalisasi), `tts.connector.ts` (createTtsPlugin + TtsApi facade 25 kategori + gateway lengkap:
+  shop/order/product/inventory/fulfillment/returns/shipping/payment/promotion/finance/media/merchant +
+  OAuth+tokenStore+auto-refresh + registerTts + `ttsPlugin`), `generated/**` (25 kategori dari SDK user,
+  import disesuaikan `../../tts.client`/`../../tts.types`), `index.ts` export semua. `package.json`
+  description → "TikTok Shop connector plugin".
+- **Fix penting:** `updateInventoryBySku` sebelumnya no-op → kini closure `updateInventory` real
+  (inventorySearch resolve product_id/warehouse → `product.updateInventory`). `TikTokClient`
+  dirapikan utk `exactOptionalPropertyTypes` (conditional spread). `tts.mapper` signature `money`
+  diperbaiki cast currency. Dead code `clientForPlatform`/`updateInventoryBySku` lama dihapus.
+- **ESLint:** root `eslint.config.js` + ignore `**/generated/**` (kode generated/vendored tidak di-lint) —
+  semua paket lain tidak terpengaruh (shopee/tsx generated tetap plain-lint).
+- **Test baru TTS: 32 test** (6 file): `conformance.spec.ts` (assertNoStubMethods kosong),
+  `tts.connector.spec.ts` (13: getProfile/pullOrders/since-filter/pullProducts/inventory.sync 2-calls/
+  getStockLevels/returns.list/promotion.list/payment.list/getRates/fulfillment.ship/order.track/
+  api-facade 25 kategori+header), `tts.client.spec.ts` (4: sign query GET/POST body+sign/error
+  envelope/beforeRequest), `tts.auth.spec.ts` (5: authorize URL+sign/token exchange/refresh/sign vektor),
+  `tts.mapper.spec.ts` (4), `tts.webhook.spec.ts` (5: verify HMAC true/false/object payload + map).
+- **`pnpm check` PENUH HIJAU (exit 0):** typecheck 14 paket 0 · lint 0 · build serial sukses ·
+  test **237 total**: core 50 · connector 10 · module 53 · api 21 · db-pg 15 (Postgres nyata) ·
+  sdk 6 · platform-local 4 · platform-shopee 46 · **platform-tts-tokopedia 32**.
+- **Open item:** live-verify TikTok Shop butuh sandbox/partner credentials user (BELUM diberikan).
+  `media.list` return `[]` (no-op best-effort, TTS tidak sediakan media list). `shipping.getRates`
+  pakai `getShippingProviders` yang butuh `delivery_option_id` path param — best-effort.
+- **TODO berikutnya:** live-verify TTS saat kredensial tersedia; implementasi lazada/blibli stub
+  mengikuti pola shopee+TTS; re-verify merchant Shopee butuh token baru (expired).
+
 ### `[2026-09-06]` Pos: SDK+enforcement+expand domain COMPLETED & COMMIT `4ea9d39` — Shopee referensi selesai, `pnpm check` penuh hijau 203 test ✅
 
 - **COMMIT `4ea9d39`** telah dibuat (44 files, +1816/−144): `feat(sdk,connector,platform-shopee)` — berisi

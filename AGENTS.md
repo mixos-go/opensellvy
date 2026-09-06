@@ -37,7 +37,7 @@ packages/
   db-pg/            @opensellvy/db-pg          Repos nyata di Postgres (Drizzle) + battle tests
   platform-local/   @opensellvy/platform-local Adapter bukti one-gate (in-memory)
   platform-shopee/  @opensellvy/platform-shopee Adapter REFERENSI nyata (full Open Platform v2) ★
-  platform-tts-tokopedia/  stub (belum diimplementasi)
+  platform-tts-tokopedia/  @opensellvy/platform-tts-tokopedia Adapter TikTok Shop (SDK user di-vendor) ●
   platform-lazada/         stub (belum diimplementasi)
   platform-blibli/         stub (belum diimplementasi)
   sdk/              @opensellvy/sdk            Umbrella SDK instalable (OpenSellvy, defineConfig, + subpath export semua package non-platform: /connector /module /api /core /db /db-pg)
@@ -131,8 +131,12 @@ platform adapters `↔ registry (connector)` via register (bukan di-import balik
 - Rules: wiring `repos`/`repositories`; **tidak boleh import platform-* langsung** — platform didaftarkan
   lewat registry oleh pemakai.
 
-### 3.11 Stubs platform (`platform-tts-tokopedia`, `platform-lazada`, `platform-blibli`) & `ui`
-- `tts-tokopedia`/`lazada`/`blibli`: stub hanya `index.ts` (belum diimplementasi). Jika diisi, ikuti pola
+### 3.11 Stubs platform (`platform-lazada`, `platform-blibli`) & `ui`
+- `platform-tts-tokopedia`: **DIIMPLEMENTASI** (bukan stub) — pola SDK user di-vendor; lihat §5 pola adapter &
+  dok SKILLS TTS bila perlu. Struktur: `tts.client`/`tts.auth`/`tts.types`/`tts.mapper`/`tts.webhook`/
+  `tts.connector` (createTtsPlugin + TtsApi 25 kategori + gateway lengkap) + `generated/**` (25 kategori,
+  JANGAN edit — berasal dari SDK user) + 32 test (conformance/connector/client/auth/mapper/webhook).
+- `lazada`/`blibli`: stub hanya `index.ts` (belum diimplementasi). Jika diisi, ikuti pola
   `platform-shopee` (client/auth/mapper/webhook/connector/index) + daftarkan via registry.
 - `ui`: kosong/belum aktif (fase akhir) — jangan kerjakan kecuali diminta.
 
@@ -265,6 +269,44 @@ Production global: `https://partner.shopeemobile.com` (flexible via `credentials
 
 > ⚠️ Kredensial sisa uji: access token berlaku ~4 jam; cek `expire_time` sebelum mengandalkan.
 > JANGAN commit kredensial nyata ke repo.
+
+---
+
+## 6b. TikTok Shop (platform `tts-tokopedia`) — fakta teknis terverifikasi dari SDK user
+
+- Base URL: `https://open-api.tiktokglobalshop.com`. `TTS_BASE_URL` diekspor connector.
+- **Signing HMAC-SHA256** (`tts.client.ts:sign`): query params (common + business, TANPA `sign`/`access_token`)
+  di-sort ASC → `signString = apiPath + concat(k+v)` → tambahkan compact JSON body bila ada →
+  `input = app_secret + signString + app_secret` → hex. Timestamp detik. Access token dikirim via
+  header **`x-tts-access-token`** (BUKAN di URL).
+- **Common params URL:** `app_key`, `timestamp`, `sign`, opsional `shop_cipher` (cross-border/multi-shop).
+  GET business params di URL; POST business params di BODY JSON.
+- **OAuth (VERIFIED live 2026-09, app key `6kr44ku4st6in`):** entry authorize = halaman browser
+  `https://services.tiktokshop.com/open/authorize?app_key=...&path=<redirect>&state=...` (TANPA sign —
+  HTTP 200 terverifikasi). Token API host TERPISAH: `GET https://auth.tiktok-shops.com/api/v2/token/get`
+  (query `app_key`, `app_secret`, `auth_code`, `grant_type=authorized_code` — persis, bukan
+  `authorization_code`) & refresh `GET .../api/v2/token/refresh` (`refresh_token`,
+  `grant_type=refresh_token`). **PENTING:** path lama `/authorization/202309/{authorize,token,...}` di
+  `open-api.tiktokglobalshop.com` SUDAH TIDAK VALID → `36009009 Invalid path` (verified). `open-api`
+  hanya untk API bisnis (mis. `/authorization/202309/shops` valid, butuh sign). Respons token:
+  `data.access_token/refresh_token/access_token_expire_in/...`. Access token ~7 hari; OAuthToken
+  adapter menyimpan `shop_cipher` ekstra (bila ada; resolusi: option → credentials ext → token store).
+- **Envelope sukses:** `{ code: 0, message, request_id, data }`; `code !== 0` = error → `TikTokError`.
+- **Webhook:** payload JSON `{ event_type, timestamp, sign, data }`, header `X-TTK-SIGN` =
+  `hex(HMAC-SHA256(app_secret, payload.timestamp + payload.sign))` — verify timing-safe (tts.webhook.ts).
+  Event topik: ORDER_STATUS_CHANGE, PRODUCT_STATUS_CHANGE, RETURN_STATUS_CHANGE,
+  CANCELLATION_STATUS_CHANGE, PACKAGE_UPDATE, RECIPIENT_ADDRESS_UPDATE.
+- **Endpoint penting gateway:** order list POST `/order/202309/orders/search` (default window 7 hari),
+  detail GET `/order/202507/orders?ids=`, produk: search `/product/202502/products/search` + detail
+  `/product/202309/products/{product_id}`, inventory search `/product/202309/inventory/search` +
+  update `/product/202309/products/{product_id}/inventory/update`, ship `/fulfillment/202309/orders/
+  {order_id}/packages`, tracking `/fulfillment/202309/orders/{order_id}/tracking`, returns
+  `/return_refund/202309/returns/search` + `/returns/{return_id}/approve|reject`, cancel
+  `/return_refund/202309/cancellations`, finance `/finance/202309/payments`, promosi
+  `/promotion/202309/activities/search`.
+- `generated/**` (25 kategori `TikTok<Category>Api`) = hasil generate SDK user — **JANGAN edit langsung**;
+  import-nya relatif `../../tts.client`/`../../tts.types`. ESLint meng-ignore `**/generated/**` (root config).
+- Open/belum live-verify: butuh sandbox credentials TikTok (akses token ~7 hari) — belum tersedia.
 
 ---
 

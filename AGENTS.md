@@ -41,7 +41,7 @@ packages/
   platform-lazada/         stub (belum diimplementasi)
   platform-blibli/         stub (belum diimplementasi)
   sdk/              @opensellvy/sdk            Umbrella SDK instalable (OpenSellvy, defineConfig, + subpath export semua package non-platform: /connector /module /api /core /db /db-pg)
-  ui/               @opensellvy/ui             (kosong/belum aktif — fase akhir)
+  ui/               @opensellvy/ui             Aktif: shadcn/ui 60 primitives + komponen platform (lazada/blibli "Soon")
 ```
 
 - Root scripts: `pnpm check` (typecheck+lint+build+test), `build` (serial), `demo:local`.
@@ -138,7 +138,14 @@ platform adapters `↔ registry (connector)` via register (bukan di-import balik
   JANGAN edit — berasal dari SDK user) + 32 test (conformance/connector/client/auth/mapper/webhook).
 - `lazada`/`blibli`: stub hanya `index.ts` (belum diimplementasi). Jika diisi, ikuti pola
   `platform-shopee` (client/auth/mapper/webhook/connector/index) + daftarkan via registry.
-- `ui`: kosong/belum aktif (fase akhir) — jangan kerjakan kecuali diminta.
+- `ui`: **AKTIF (2026-09-06)** — shadcn/ui via CLI (Tailwind v4, React 18/19, tsup esm+dts). 60 primitives
+  di `src/components/ui/` (campuran radix untuk komponen klasik + `@base-ui/react`+`@shadcn/react`+package
+  `cn` utk komponen baru), theme `src/styles/globals.css` (di-copy ke `dist/globals.css`, subpath
+  `@opensellvy/ui/styles.css`). **Import alias `@/` sdh direwrite ke relatif** — kalau re-generate shadcn,
+  masih ada `@/` → rewrite lagi (script per-file rel ke `src/`). Komponen fuksin: `PlatformsSection`
+  (lazada & blibli status "Soon"). Stub kosong lama (DataTable/OrderStatusBadge/PlatformIcon/useOrder/
+  useProduct/AuthProvider/ThemeProvider) masih 0-byte. Stack detail + jebakan CLI (`add --all` gagal utk
+  5 item yang 404 di registry new-york-v4; fix `exactOptionalPropertyTypes` di 5 file) → **TODO STATE TRACKER #4**.
 
 ---
 

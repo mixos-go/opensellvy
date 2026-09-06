@@ -16,6 +16,40 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-06 #4]` Pos: `@opensellvy/ui` aktif dengan shadcn (60 primitives) + daftar platform (lazada/blibli "Soon") ✅
+
+- **TTS commit + push DONE:** `26ec291` `feat(platform-tts-tokopedia): ...` (47 file, 18110+) — push
+  `ed1788a..26ec291 → main`. Blok #3 di bawah sdh valid (state "Belum di-commit" sudah teratasi).
+- **UI package diaktifkan** (sebelumnya kosong/stub 14 file 0-byte). Stack: **shadcn/ui via CLI**,
+  Tailwind v4, React 19 (dev) / peer `^18.2 || ^19`, tsup (esm+dts).
+  - `components.json` (style new-york-v4, baseColor neutral, css-variables, lucide).
+  - **60 primitives shadcn** di-`add` via CLI (`pnpm dlx shadcn@latest add <60 n> --yes`).
+    Catatan: `add --all` GAGAL — style registry new-york-v4 TIDAK punya `questionnaire`, `data-table`,
+    `date-picker`, `toast`, `typography` (404 di registry; `toast` diganti `sonner`). List diambil dari
+    sitemap, dicross-check HTTP 200 per-item → 60 yang ada di-add.
+  - **Campuran radix + base-ui:** komponen klasik (button, card, ...) radix (`radix-ui`); komponen baru
+    (item, field, bubble, combobox, ...) dari `@base-ui/react` + `@shadcn/react` + package `cn`.
+  - Import alias `@/` DI-REWRITE ke relatif (`rs` per-file → rel ke `src/`) agar dist d.ts bersih utk
+    consumer. `tsup.config.ts` = esbuild alias `@: srcDir` (safety); external react/react-dom.
+  - **Fix shadcn utk strict TS (`exactOptionalPropertyTypes`):** context-menu/dropdown-menu/menubar
+    `checked` → conditional spread `{...(checked !== undefined ? { checked } : {})}`; slider
+    `value/defaultValue` → conditional spread; sonner `NonNullable<ToasterProps["theme"]>`. Lint: combobox
+    `children` unused → dihapus dari destructure (jangan diulang kalau regenerate).
+  - `src/styles/globals.css` = theme shadcn v4 (oklch, neutral); di-copy ke `dist/globals.css`;
+    subpath export `@opensellvy/ui/styles.css`.
+- **Komponen baru:** `src/components/platforms/PlatformsSection.tsx` → `PlatformsSection` + `PLATFORMS`
+  (meta 5 platform dari `PlatformCode`; **lazada & blibli status `soon` → badge "Soon"** (card dashed,
+  opacity), shopee/tts-tokopedia/local → badge "Ready"). Data display-name di UI (types hanya punya
+  PlatformCode). Export barel: `src/index.ts` → components/ui + platforms + hooks + `cn`.
+- **`pnpm check` PENUH HIJAU:** typecheck 14 paket · lint 0 · build serial · test 239 (core 50 ·
+  connector 10 · module 53 · api 21 · db-pg 15 · sdk 6 · local 4 · shopee 46 · TTS 34). UI belum ada test
+  (`--passWithNoTests`).
+- **Belum dilakukan:** `init` CLI tidak bisa di package library (butuh framework Next/Vite) → komponen + theme
+  dibuat via `add` + file infra manual. Preview app (vite) utk lihat UI belum ada. Stub kosong lama
+  (DataTable/OrderStatusBadge/PlatformIcon/hooks/useOrder/useProduct/providers) dibiarkan 0-byte.
+- **TODO berikutnya:** commit UI (`feat(ui): ...`); lanjut fill stub komponen (DataTable, OrderStatusBadge,
+  PlatformIcon, providers/Auth+Theme); demo/vite preview bila diminta; implement lazada/blibli adapter.
+
 ### `[2026-09-06 #3]` Pos: TTS adapter LIVE-VERIFIED terhadap sandbox TikTok Shop nyata (app key `6kr44ku4st6in`) ✅
 
 - **TERVERIFIKASI LIVE (2026-09-06):** OAuth + gateway pemakai sandbox TikTok Shop nyata. Shop sandbox:

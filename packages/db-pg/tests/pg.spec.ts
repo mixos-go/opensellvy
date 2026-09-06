@@ -65,26 +65,83 @@ const dummy: PlatformPlugin = {
   platform: 'local',
   name: 'Local',
   baseUrl: 'memory://local',
-  capabilities: ['order.pull', 'order.push', 'product.pull', 'product.push', 'inventory.sync'],
+  capabilities: ['order.pull', 'order.push', 'product.pull', 'product.push', 'inventory.sync', 'return.manage'],
   auth: {
     getAuthorizeUrl: (_c) => Promise.resolve('http://local/authorize'),
     exchangeCode: (_c, _code) => Promise.resolve({ accessToken: 't', expiresAt: Date.now() + 60_000 }),
     refreshToken: () => Promise.resolve({ accessToken: '' }),
   },
   gateway: {
-    getShop: () => Promise.resolve({ platformShopId: 'shop-local', shopName: 'Local Shop', marketplace: 'local' }),
-    pullOrders: () => Promise.resolve([...seeded.values()]),
-    getOrder: (_c, id) => {
-      const found = [...seeded.values()].find((o) => o.platformOrderId === id);
-      return found ? Promise.resolve(found) : Promise.reject(new Error('not found'));
+    shop: {
+      getProfile: () => Promise.resolve({ platformShopId: 'shop-local', shopName: 'Local Shop', marketplace: 'local' }),
+      updateProfile: () => Promise.resolve(),
+      getSettings: () => Promise.resolve({ platformShopId: 'shop-local', holidayMode: false, warehouses: [] }),
+      setHolidayMode: () => Promise.resolve(),
+      listWarehouses: () => Promise.resolve([]),
     },
-    pushOrder: () => Promise.resolve(),
-    updateOrder: () => Promise.resolve(),
-    pullProducts: () => Promise.resolve([]),
-    pushProduct: () => Promise.resolve(),
-    pushProducts: () => Promise.resolve(),
-    syncInventory: () => Promise.resolve(),
-    manageReturn: () => Promise.resolve(),
+    order: {
+      pull: () => Promise.resolve([...seeded.values()]),
+      get: (_c, id) => {
+        const found = [...seeded.values()].find((o) => o.platformOrderId === id);
+        return found ? Promise.resolve(found) : Promise.reject(new Error('not found'));
+      },
+      push: () => Promise.resolve(),
+      update: () => Promise.resolve(),
+      track: () => Promise.resolve([]),
+    },
+    product: {
+      pull: () => Promise.resolve([]),
+      push: () => Promise.resolve(),
+      update: () => Promise.resolve(),
+      listCategories: () => Promise.resolve([]),
+    },
+    inventory: {
+      getStockLevels: () => Promise.resolve([]),
+      sync: () => Promise.resolve(),
+      adjust: () => Promise.resolve(),
+    },
+    fulfillment: {
+      ship: () => Promise.resolve(),
+      updateStatus: () => Promise.resolve(),
+    },
+    returns: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.reject(new Error('not implemented')),
+      act: () => Promise.resolve(),
+    },
+    shipping: {
+      getRates: () => Promise.resolve([]),
+      listShipments: () => Promise.resolve([]),
+      getShipment: () => Promise.reject(new Error('not implemented')),
+    },
+    payment: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.reject(new Error('not implemented')),
+      refund: () => Promise.resolve(),
+    },
+    promotion: {
+      list: () => Promise.resolve([]),
+      get: () => Promise.reject(new Error('not implemented')),
+      create: (_c, p) => Promise.resolve(p),
+      update: () => Promise.resolve(),
+      setActive: () => Promise.resolve(),
+    },
+    finance: {
+      overview: () => Promise.resolve({}),
+      transactions: () => Promise.resolve([]),
+      statement: () => Promise.resolve({ id: '', fileName: '', status: 'generating' }),
+      payoutInfo: () => Promise.resolve({ payouts: [] }),
+    },
+    media: {
+      upload: () => Promise.reject(new Error('not implemented')),
+      list: () => Promise.resolve([]),
+    },
+    merchant: {
+      getProfile: () => Promise.reject(new Error('not implemented')),
+      listShops: () => Promise.resolve([]),
+      listWarehouses: () => Promise.resolve([]),
+      listWarehouseLocations: () => Promise.resolve([]),
+    },
   },
   webhook: { verify: () => Promise.resolve(true), map: (_e, d) => Promise.resolve({ type: _e, data: d }) },
 };

@@ -48,12 +48,21 @@ export const dummyGateway: PlatformGateway = {
     update: () => Promise.resolve(),
     setActive: () => Promise.resolve(),
   },
+  finance: {
+    overview: () => Promise.resolve({}),
+    transactions: () => Promise.resolve([]),
+    statement: () => Promise.resolve({ id: '', fileName: '', status: 'generating' as const }),
+    payoutInfo: () => Promise.resolve({ payouts: [] }),
+  },
   media: {
     upload: () => Promise.reject(new Error('not implemented')),
     list: () => Promise.resolve([]),
   },
   merchant: {
     getProfile: () => Promise.reject(new Error('not implemented')),
+    listShops: () => Promise.resolve([]),
+    listWarehouses: () => Promise.resolve([]),
+    listWarehouseLocations: () => Promise.resolve([]),
   },
 };
 

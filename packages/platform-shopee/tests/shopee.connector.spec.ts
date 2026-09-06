@@ -129,6 +129,148 @@ describe('Shopee connector gateway (stub fetch)', () => {
     });
     await expect(plugin.gateway.shop.getProfile(context() as never)).rejects.toMatchObject({ name: 'ShopeeApiError', code: 'access_token_value_expired' });
   });
+
+  it('shop.getSettings → ShopSettings dari get_shop_info + holiday mode + warehouse list', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route((url) => {
+        if (url.pathname.includes('/get_shop_holiday_mode')) {
+          return { error: '', response: { holiday_mode_on: true } };
+        }
+        if (url.pathname.includes('/get_merchant_warehouse_list')) {
+          return { error: '', response: { warehouse_list: [{ warehouse_id: 9, warehouse_name: 'WH-A', warehouse_region: 'ID' }] } };
+        }
+        return { error: '', response: { shop_name: 'Toko Andi', region: 'ID' } };
+      }),
+    });
+    const settings = await plugin.gateway.shop.getSettings(context() as never);
+    expect(settings.holidayMode).toBe(true);
+    expect(settings.warehouses[0].name).toBe('WH-A');
+  });
+
+  it('shop.setHolidayMode → POST set_shop_holiday_mode dengan holiday_mode_on', async () => {
+    let seen: unknown;
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: async (input: unknown, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const body = JSON.parse(String(init?.body ?? '{}'));
+        if (url.pathname.includes('/set_shop_holiday_mode')) seen = body;
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          text: () => Promise.resolve(JSON.stringify({ error: '', response: {} })),
+        } as Response);
+      },
+    });
+    await plugin.gateway.shop.setHolidayMode(context() as never, false);
+    expect(seen).toEqual({ holiday_mode_on: false });
+  });
+
+  it('shop.listWarehouses → MerchantWarehouse[] dari get_merchant_warehouse_list', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { warehouse_list: [{ warehouse_id: 1, warehouse_name: 'Gudang A' }] } })),
+    });
+    const list = await plugin.gateway.shop.listWarehouses(context() as never);
+    expect(list[0].id).toBe('1');
+    expect(list[0].name).toBe('Gudang A');
+  });
+
+  it('finance.overview → FinanceOverview dari get_income_overview', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { latest_payout_date: '2026-09-01' } })),
+    });
+    const overview = await plugin.gateway.finance.overview(context() as never);
+    expect(overview.lastPayoutAt).toBe('2026-09-01');
+  });
+
+  it('finance.transactions → WalletTransaction[] dari get_wallet_transaction_list', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({
+        error: '',
+        response: {
+          transaction_list: [
+            {
+              transaction_type: 'PAYOUT',
+              money_flow: 'MONEY_IN',
+              amount: 5000,
+              current_balance: 12345,
+              create_time: 1655714431,
+              order_sn: 'SN-1',
+            },
+          ],
+        },
+      })),
+    });
+    const txs = await plugin.gateway.finance.transactions(context() as never);
+    expect(txs).toHaveLength(1);
+    expect(txs[0].type).toBe('PAYOUT');
+    expect(txs[0].direction).toBe('in');
+    expect(txs[0].amount.amount).toBe(5000);
+  });
+
+  it('finance.statement → FinanceStatement dari get_income_statement', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { file_name: 'stmt.pdf', file_link: 'https://x/stmt.pdf', status: 3 } })),
+    });
+    const st = await plugin.gateway.finance.statement(context() as never);
+    expect(st.fileName).toBe('stmt.pdf');
+    expect(st.status).toBe('ready');
+    expect(st.fileUrl).toBe('https://x/stmt.pdf');
+  });
+
+  it('finance.payoutInfo → PayoutInfo dari get_payout_info', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { payout_list: [{ encrypted_payout_id: 'P1', payout_amount: 25000 }] } })),
+    });
+    const info = await plugin.gateway.finance.payoutInfo(context() as never);
+    expect(info.payouts[0].id).toBe('P1');
+    expect(info.payouts[0].amount.amount).toBe(25000);
+  });
+
+  it('finance.payoutInfo → PayoutInfo [] saat platform error', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: 'server_error', message: 'boom' })),
+    });
+    const empty = await plugin.gateway.finance.payoutInfo(context() as never);
+    expect(empty.payouts).toEqual([]);
+  });
+
+  it('merchant.listShops → MerchantShop[] dari get_shop_list_by_merchant', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { shop_list: [{ shop_id: 14701711 }], more: false } })),
+    });
+    const shops = await plugin.gateway.merchant.listShops(context() as never);
+    expect(shops[0].shopId).toBe('14701711');
+  });
+
+  it('merchant.listWarehouses → MerchantWarehouse[] dari get_merchant_warehouse_list', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { warehouse_list: [{ warehouse_id: 4, warehouse_name: 'WH-4', warehouse_region: 'SG' }] } })),
+    });
+    const list = await plugin.gateway.merchant.listWarehouses(context() as never);
+    expect(list[0].id).toBe('4');
+    expect(list[0].region).toBe('SG');
+  });
+
+  it('merchant.listWarehouseLocations → MerchantWarehouse[] dari get_merchant_warehouse_location_list', async () => {
+    const plugin = createShopeePlugin({
+      now: () => TS,
+      fetch: route(() => ({ error: '', response: { response: [{ location_id: 'loc-1', warehouse_name: 'Zone A' }] } })),
+    });
+    const list = await plugin.gateway.merchant.listWarehouseLocations(context() as never, 'wh-1');
+    expect(list[0].id).toBe('loc-1');
+    expect(list[0].name).toBe('Zone A');
+  });
 });
 
 describe('Shopee auth default & re-export', () => {

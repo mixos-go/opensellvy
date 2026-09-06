@@ -37,6 +37,12 @@ import {
   getStockLevelsHandler,
   adjustRemoteInventoryHandler,
 } from './controllers/platform.controller';
+import {
+  financeOverviewHandler,
+  financeTransactionsHandler,
+  financeStatementHandler,
+  financePayoutInfoHandler,
+} from './controllers/finance.controller';
 
 /**
  * Router layer — komposisi Hono app dari route + middleware.
@@ -109,6 +115,12 @@ export function buildApp(ctx: ApiContext): Hono<{ Variables: { api: ApiContext; 
   // Platform inventory remote
   app.post('/api/stores/:storeId/platforms/:platform/inventory/levels', bearerAuth, getStockLevelsHandler);
   app.post('/api/stores/:storeId/platforms/:platform/inventory/adjust', bearerAuth, adjustRemoteInventoryHandler);
+
+  // Platform finance
+  app.get('/api/stores/:storeId/platforms/:platform/finance/overview', bearerAuth, financeOverviewHandler);
+  app.get('/api/stores/:storeId/platforms/:platform/finance/transactions', bearerAuth, financeTransactionsHandler);
+  app.get('/api/stores/:storeId/platforms/:platform/finance/statement', bearerAuth, financeStatementHandler);
+  app.get('/api/stores/:storeId/platforms/:platform/finance/payout-info', bearerAuth, financePayoutInfoHandler);
 
   // Webhook receiver — per-platform signature di controller
   app.post('/webhooks/:platform', webhookReceiverHandler);

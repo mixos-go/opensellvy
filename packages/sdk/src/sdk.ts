@@ -75,7 +75,6 @@ export class OpenSellvy {
         const { Pool } = await import('pg');
         // @ts-expect-error runtime-only optional dep
         const { drizzle } = await import('drizzle-orm/node-postgres');
-        // @ts-expect-error runtime-only optional dep — @opensellvy/db-pg
         const { createPostgresRepositories } = await import('@opensellvy/db-pg');
         const { schema } = await import('@opensellvy/db');
         const pool = new Pool({ connectionString: url });

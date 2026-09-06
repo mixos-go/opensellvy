@@ -12,6 +12,13 @@ import type {
   Payment,
   Promotion,
   MediaAsset,
+  ShopSettings,
+  MerchantWarehouse,
+  MerchantShop,
+  FinanceOverview,
+  WalletTransaction,
+  FinanceStatement,
+  PayoutInfo,
 } from '@opensellvy/types';
 
 const BASE_URL = 'https://api.blibli.com';
@@ -41,6 +48,11 @@ export const blibliPlugin: PlatformPlugin = {
       getProfile: (_ctx): Promise<PlatformShopProfile> =>
         Promise.resolve({ platformShopId: '', shopName: '', marketplace: '' }),
       updateProfile: (_ctx, _patch) => Promise.resolve(),
+      getSettings: (_ctx): Promise<ShopSettings> =>
+        Promise.resolve({ platformShopId: '', holidayMode: false, warehouses: [] }),
+      setHolidayMode: (_ctx, _enabled) => Promise.resolve(),
+      listWarehouses: (_ctx): Promise<MerchantWarehouse[]> =>
+        Promise.resolve([]),
     },
     order: {
       pull: (_ctx, _opts): Promise<UnifiedOrder[]> => Promise.resolve([]),
@@ -93,12 +105,27 @@ export const blibliPlugin: PlatformPlugin = {
       update: (_ctx, _promotionId, _patch) => Promise.resolve(),
       setActive: (_ctx, _promotionId, _active) => Promise.resolve(),
     },
+    finance: {
+      overview: (_ctx): Promise<FinanceOverview> =>
+        Promise.resolve({}),
+      transactions: (_ctx, _query): Promise<WalletTransaction[]> =>
+        Promise.resolve([]),
+      statement: (_ctx, _opts): Promise<FinanceStatement> =>
+        Promise.resolve({ id: '', fileName: '', status: 'generating' }),
+      payoutInfo: (_ctx): Promise<PayoutInfo> =>
+        Promise.resolve({ payouts: [] }),
+    },
     media: {
       upload: (_ctx, _opts) => Promise.reject(new Error('not implemented')),
       list: (_ctx, _opts): Promise<MediaAsset[]> => Promise.resolve([]),
     },
     merchant: {
       getProfile: (_ctx) => Promise.reject(new Error('not implemented')),
+      listShops: (_ctx): Promise<MerchantShop[]> => Promise.resolve([]),
+      listWarehouses: (_ctx): Promise<MerchantWarehouse[]> =>
+        Promise.resolve([]),
+      listWarehouseLocations: (_ctx, _warehouseId): Promise<Array<{ id: string; name: string }>> =>
+        Promise.resolve([]),
     },
   },
   webhook: {

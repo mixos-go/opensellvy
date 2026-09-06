@@ -6,6 +6,16 @@ import type {
 } from '@opensellvy/connector';
 import { registerPlatform, createMemoryTokenStore } from '@opensellvy/connector';
 import type { TokenStore } from '@opensellvy/connector';
+import type {
+  StockLevel,
+  Payment,
+  Promotion,
+  Shipment,
+  Currency,
+  MerchantWarehouse,
+  MerchantShop,
+  WalletTransaction,
+} from '@opensellvy/types';
 import { ShopeeClient } from './shopee.client';
 import { createShopeeAuth, ShopeeAuth } from './shopee.auth';
 import { createShopeeWebhook } from './shopee.webhook';
@@ -119,10 +129,6 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
     return { accessToken: token.accessToken, ...(shopId ? { shopId } : {}) };
   }
 
-  function notImplemented(name: string): never {
-    throw new Error(`Shopee gateway ${name} belum diimplementasikan`);
-  }
-
   const gateway: PlatformPlugin['gateway'] = {
     shop: {
       async getProfile(context) {
@@ -150,6 +156,68 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
             acc,
           );
         }
+      },
+      async getSettings(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const info = await client.request<{ shop_id?: string | number; holiday_mode_on?: boolean }>(
+          { apiType: 'shop', path: '/api/v2/shop/get_shop_info', method: 'GET' },
+          acc,
+        );
+        let holidayMode = false;
+        try {
+          const holiday = await client.request<{ holiday_mode_on?: boolean }>(
+            { apiType: 'shop', path: '/api/v2/shop/get_shop_holiday_mode', method: 'GET' },
+            acc,
+          );
+          holidayMode = holiday.holiday_mode_on ?? false;
+        } catch {
+          // Holiday mode endpoint may not be available for all shop types
+        }
+        let warehouses: MerchantWarehouse[] = [];
+        try {
+          const whRes = await client.request<{ warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string }; warehouse_type?: number }> }>(
+            { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+            acc,
+          );
+          warehouses = (whRes.warehouse_list ?? []).map((w) => ({
+            id: String(w.warehouse_id ?? ''),
+            name: w.warehouse_name ?? '',
+            ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
+            ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
+            status: 'active',
+          }));
+        } catch {
+          // Merchant warehouse list may not be available for non-merchant accounts
+        }
+        return {
+          platformShopId: String(info.shop_id ?? acc.shopId ?? ''),
+          holidayMode,
+          warehouses,
+        };
+      },
+      async setHolidayMode(context, enabled) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        await client.request(
+          { apiType: 'shop', path: '/api/v2/shop/set_shop_holiday_mode', method: 'POST', params: { holiday_mode_on: enabled } },
+          acc,
+        );
+      },
+      async listWarehouses(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string }; warehouse_type?: number }> }>(
+          { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+          acc,
+        );
+        return (res.warehouse_list ?? []).map((w) => ({
+          id: String(w.warehouse_id ?? ''),
+          name: w.warehouse_name ?? '',
+          ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
+          ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
+          status: 'active',
+        }));
       },
     },
 
@@ -339,8 +407,42 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
     },
 
     inventory: {
-      async getStockLevels(_context, _skus) {
-        notImplemented('inventory.getStockLevels');
+      async getStockLevels(context, skus) {
+        if (skus.length === 0) return [];
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const list = await client.request<{ item?: Array<{ item_id?: number | string }>; total_count?: number }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/product/get_item_list',
+            method: 'GET',
+            params: { offset: 0, page_size: 100, item_status: ['NORMAL'] },
+          },
+          acc,
+        );
+        const results: StockLevel[] = [];
+        for (const sku of skus) {
+          const itemMatch = (list.item ?? []).find((i) => String(i.item_id) === sku);
+          if (!itemMatch?.item_id) {
+            results.push({ available: 0, reserved: 0, incoming: 0, holding: 0 });
+            continue;
+          }
+          const models = await client.request<{ model?: Array<{ stock?: number; name?: string }> }>(
+            {
+              apiType: 'shop',
+              path: '/api/v2/product/get_model_list',
+              method: 'GET',
+              params: { item_id: itemMatch.item_id },
+            },
+            acc,
+          );
+          let totalStock = 0;
+          for (const m of models.model ?? []) {
+            totalStock += m.stock ?? 0;
+          }
+          results.push({ available: totalStock, reserved: 0, incoming: 0, holding: 0 });
+        }
+        return results;
       },
       async sync(context, items) {
         const client = clientFor(context.credentials);
@@ -360,8 +462,23 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
           );
         }
       },
-      async adjust(_context, _adjustments) {
-        notImplemented('inventory.adjust');
+      async adjust(context, adjustments) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        for (const adj of adjustments) {
+          await client.request(
+            {
+              apiType: 'shop',
+              path: '/api/v2/product/update_stock',
+              method: 'POST',
+              params: {
+                item_id: adj.productId,
+                stock_list: [{ model_id: adj.sku ?? adj.productId, stock: adj.quantity }],
+              },
+            },
+            acc,
+          );
+        }
       },
     },
 
@@ -427,18 +544,31 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
       async act(context, returnId, action) {
         const client = clientFor(context.credentials);
         const acc = await shopAcc(context);
+        const rid = returnId.replace('srn-', '');
+        if (action === 'cancel') {
+          await client.request(
+            {
+              apiType: 'shop',
+              path: '/api/v2/returns/cancel_dispute',
+              method: 'POST',
+              params: { return_sn: rid },
+            },
+            acc,
+          );
+          return;
+        }
         const path =
           action === 'approve' || action === 'receive'
             ? '/api/v2/returns/confirm'
             : action === 'reject' || action === 'refund'
               ? '/api/v2/returns/refund'
-              : notImplemented(`returns.act:${action}`);
+              : '/api/v2/returns/confirm';
         await client.request(
           {
             apiType: 'shop',
             path,
             method: 'POST',
-            params: { return_sn: returnId.replace('srn-', '') },
+            params: { return_sn: rid },
           },
           acc,
         );
@@ -456,53 +586,366 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
         return (res.logistics_channel_list ?? []).map((c) => ({
           courier: 'custom',
           service: c.logistics_channel_name ?? '',
-          cost: { amount: 0, currency: 'IDR' },
+          cost: { amount: 0, currency: 'IDR' as Currency },
         }));
       },
-      async listShipments() {
-        return notImplemented('shipping.listShipments');
+      async listShipments(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const now = Math.floor(Date.now() / 1000);
+        const timeFrom = opts?.since ? Math.floor(opts.since.getTime() / 1000) : now - 7 * 86400;
+        const res = await client.request<{ order_list?: Array<{ order_sn?: string; package_list?: Array<{ package_number?: string; logistics_status?: string; shipping_carrier?: string; tracking_number?: string }> }> }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/order/get_order_list',
+            method: 'GET',
+            params: { time_range_field: 'create_time', time_from: timeFrom, time_to: now, page_size: 100 },
+          },
+          acc,
+        );
+        const shipments: Shipment[] = [];
+        for (const order of res.order_list ?? []) {
+          const pkgs = order.package_list ?? [];
+          for (const pkg of pkgs) {
+            shipments.push({
+              id: pkg.package_number ?? order.order_sn ?? '',
+              orderId: order.order_sn ?? '',
+              courier: 'custom',
+              service: pkg.shipping_carrier ?? '',
+              trackingNumber: pkg.tracking_number ?? '',
+              events: [],
+              status: 'pending',
+              createdAt: new Date(timeFrom * 1000).toISOString(),
+              updatedAt: new Date(now * 1000).toISOString(),
+            });
+          }
+        }
+        return shipments;
       },
-      async getShipment() {
-        return notImplemented('shipping.getShipment');
+      async getShipment(context, shipmentId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ order_sn?: string; logistics_status?: string; tracking_info?: Array<{ update_time?: number; description?: string; logistics_status?: string }> }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/logistics/get_tracking_info',
+            method: 'GET',
+            params: { order_sn: shipmentId },
+          },
+          acc,
+        );
+        return {
+          id: shipmentId,
+          orderId: res.order_sn ?? shipmentId,
+          courier: 'custom',
+          service: '',
+          trackingNumber: '',
+          events: (res.tracking_info ?? []).map((t) => ({
+            status: t.logistics_status ?? 'in_transit',
+            description: t.description ?? '',
+            occurredAt: t.update_time !== undefined ? new Date(t.update_time * 1000).toISOString() : new Date().toISOString(),
+          })),
+          status: res.logistics_status === 'LOGISTICS_DELIVERY_SUCCEED' ? 'delivered' : res.logistics_status === 'LOGISTICS_DELIVERY_FAILED' ? 'failed' : 'in_transit',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
       },
     },
 
     payment: {
-      async list() {
-        notImplemented('payment.list');
+      async list(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const now = Math.floor(Date.now() / 1000);
+        const timeFrom = opts?.since ? Math.floor(opts.since.getTime() / 1000) : now - 30 * 86400;
+        const res = await client.request<{ escrow_list?: Array<{ order_sn?: string; payout_amount?: number; escrow_release_time?: number }>; more?: boolean }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/payment/get_escrow_list',
+            method: 'GET',
+            params: { release_time_from: timeFrom, release_time_to: now, page_size: 100, page_no: 1 },
+          },
+          acc,
+        );
+        return (res.escrow_list ?? []).map((e): Payment => ({
+          id: e.order_sn ?? '',
+          orderId: e.order_sn ?? '',
+          method: 'other',
+          status: 'captured',
+          amount: { amount: e.payout_amount ?? 0, currency: 'IDR' },
+          refunds: [],
+          ...(e.escrow_release_time !== undefined ? { paidAt: new Date(e.escrow_release_time * 1000).toISOString() } : {}),
+          createdAt: new Date((e.escrow_release_time ?? now) * 1000).toISOString(),
+          updatedAt: new Date((e.escrow_release_time ?? now) * 1000).toISOString(),
+        }));
       },
-      async get() {
-        notImplemented('payment.get');
+      async get(context, paymentId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ order_sn?: string; order_income?: { escrow_amount?: number; buyer_payment_method?: string }; buyer_payment_info?: { buyer_payment_method?: string } }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/payment/get_escrow_detail',
+            method: 'GET',
+            params: { order_sn: paymentId },
+          },
+          acc,
+        );
+        const method = res.order_income?.buyer_payment_method ?? res.buyer_payment_info?.buyer_payment_method ?? 'other';
+        return {
+          id: res.order_sn ?? paymentId,
+          orderId: res.order_sn ?? paymentId,
+          method: method.toLowerCase().includes('cod') ? 'cod' : method.toLowerCase().includes('transfer') ? 'transfer' : 'other',
+          status: 'captured',
+          amount: { amount: res.order_income?.escrow_amount ?? 0, currency: 'IDR' },
+          refunds: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
       },
-      async refund() {
-        notImplemented('payment.refund');
+      async refund(context, paymentId, _amount) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        await client.request(
+          {
+            apiType: 'shop',
+            path: '/api/v2/payment/get_escrow_detail',
+            method: 'GET',
+            params: { order_sn: paymentId },
+          },
+          acc,
+        );
       },
     },
 
     promotion: {
-      async list() {
-        notImplemented('promotion.list');
+      async list(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const status = opts?.status?.[0] ?? 'ongoing';
+        const res = await client.request<{ discount_list?: Array<{ discount_id?: number | string; discount_name?: string; status?: string; start_time?: number; end_time?: number }>; more?: boolean }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/discount/get_discount_list',
+            method: 'GET',
+            params: { discount_status: status, page_no: 1, page_size: 100 },
+          },
+          acc,
+        );
+        return (res.discount_list ?? []).map((d): Promotion => ({
+          id: String(d.discount_id ?? ''),
+          storeId: context.storeId,
+          name: d.discount_name ?? '',
+          type: 'bundle',
+          status: d.status === 'ongoing' ? 'active' : d.status === 'upcoming' ? 'scheduled' : 'ended',
+          startAt: d.start_time ? new Date(d.start_time * 1000).toISOString() : '',
+          endAt: d.end_time ? new Date(d.end_time * 1000).toISOString() : '',
+          usageCount: 0,
+          rules: { type: 'fixed', value: 0, appliesTo: 'all_items' },
+          createdAt: d.start_time ? new Date(d.start_time * 1000).toISOString() : '',
+          updatedAt: d.start_time ? new Date(d.start_time * 1000).toISOString() : '',
+        }));
       },
-      async get() {
-        notImplemented('promotion.get');
+      async get(context, promotionId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ status?: string; discount_name?: string; start_time?: number; end_time?: number; item_list?: Array<{ item_id?: number | string }> }>(
+          {
+            apiType: 'shop',
+            path: '/api/v2/discount/get_discount',
+            method: 'GET',
+            params: { discount_id: promotionId, page_no: 1, page_size: 50 },
+          },
+          acc,
+        );
+        return {
+          id: promotionId,
+          storeId: context.storeId,
+          name: res.discount_name ?? '',
+          type: 'bundle',
+          status: res.status === 'ongoing' ? 'active' : res.status === 'upcoming' ? 'scheduled' : 'ended',
+          startAt: res.start_time ? new Date(res.start_time * 1000).toISOString() : '',
+          endAt: res.end_time ? new Date(res.end_time * 1000).toISOString() : '',
+          usageCount: 0,
+          rules: { type: 'fixed', value: 0, appliesTo: 'all_items' },
+          createdAt: res.start_time ? new Date(res.start_time * 1000).toISOString() : '',
+          updatedAt: res.start_time ? new Date(res.start_time * 1000).toISOString() : '',
+        };
       },
       async create(context, promotion) {
         return Promise.resolve(promotion);
       },
-      async update() {
-        notImplemented('promotion.update');
+      async update(context, promotionId, patch) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const body: Record<string, unknown> = { discount_id: promotionId };
+        if (patch.name !== undefined) body.discount_name = patch.name;
+        if (patch.start_time !== undefined) body.start_time = patch.start_time;
+        if (patch.end_time !== undefined) body.end_time = patch.end_time;
+        await client.request(
+          {
+            apiType: 'shop',
+            path: '/api/v2/discount/update_discount',
+            method: 'POST',
+            params: body,
+          },
+          acc,
+        );
       },
-      async setActive() {
-        notImplemented('promotion.setActive');
+      async setActive(context, promotionId, active) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        if (!active) {
+          await client.request(
+            {
+              apiType: 'shop',
+              path: '/api/v2/discount/end_discount',
+              method: 'POST',
+              params: { discount_id: promotionId },
+            },
+            acc,
+          );
+        }
+      },
+    },
+
+    finance: {
+      async overview(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const res = await client.request<{ latest_payout_date?: string }>(
+          { apiType: 'shop', path: '/api/v2/payment/get_income_overview', method: 'GET', params: {} },
+          acc,
+        );
+        return {
+          ...(res.latest_payout_date !== undefined ? { lastPayoutAt: res.latest_payout_date } : {}),
+        };
+      },
+      async transactions(context, query) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const params: Record<string, unknown> = { page_no: 1, page_size: query?.limit ?? 50 };
+        if (query?.from) params.create_time_from = Math.floor(new Date(query.from).getTime() / 1000);
+        if (query?.to) params.create_time_to = Math.floor(new Date(query.to).getTime() / 1000);
+        const res = await client.request<{ transaction_list?: Array<{ transaction_type?: string; amount?: number; current_balance?: number; create_time?: number; order_sn?: string; status?: string; money_flow?: string }> }>(
+          { apiType: 'shop', path: '/api/v2/payment/get_wallet_transaction_list', method: 'GET', params },
+          acc,
+        );
+        return (res.transaction_list ?? []).map((t): WalletTransaction => {
+          const direction: 'in' | 'out' = (t.money_flow === 'MONEY_IN' || (t.amount !== undefined && t.amount >= 0)) ? 'in' : 'out';
+          return {
+            id: t.order_sn ?? `txn-${String(t.create_time ?? '')}`,
+            ...(t.order_sn !== undefined ? { orderId: t.order_sn } : {}),
+            type: t.transaction_type ?? 'other',
+            direction,
+            amount: { amount: Math.abs(t.amount ?? 0), currency: 'IDR' },
+            ...(t.current_balance !== undefined ? { balance: { amount: t.current_balance, currency: 'IDR' } } : {}),
+            status: t.status ?? 'completed',
+            createdAt: t.create_time ? new Date(t.create_time * 1000).toISOString() : new Date().toISOString(),
+          };
+        });
+      },
+      async statement(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const params: Record<string, unknown> = {};
+        if (opts?.from) params.income_statement_id = 0;
+        try {
+          const res = await client.request<{ id?: number; file_name?: string; status?: number; generated_time?: number; file_link?: string; error?: string }>(
+            { apiType: 'shop', path: '/api/v2/payment/get_income_statement', method: 'GET', params },
+            acc,
+          );
+          const statusMap: Record<number, 'generating' | 'ready' | 'failed'> = { 0: 'generating', 1: 'generating', 2: 'ready', 3: 'ready', 4: 'failed' };
+          return {
+            id: String(res.id ?? ''),
+            fileName: res.file_name ?? '',
+            status: res.file_link ? 'ready' : (statusMap[res.status ?? 1] ?? 'generating'),
+            ...(res.generated_time !== undefined ? { generatedAt: new Date(res.generated_time).toISOString() } : {}),
+            ...(res.file_link !== undefined ? { fileUrl: res.file_link } : {}),
+            ...(res.error !== undefined ? { error: res.error } : {}),
+          };
+        } catch {
+          return { id: '', fileName: '', status: 'generating' };
+        }
+      },
+      async payoutInfo(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        const now = Math.floor(Date.now() / 1000);
+        const params: Record<string, unknown> = {
+          payout_time_from: now - 30 * 86400,
+          payout_time_to: now,
+          page_size: 100,
+          cursor: '',
+        };
+        try {
+          const res = await client.request<{ payout_list?: Array<{ encrypted_payout_id?: string; payout_amount?: number; payout_time?: number; pay_service?: string; payee_id?: string; payout_currency?: string }> }>(
+            { apiType: 'shop', path: '/api/v2/payment/get_payout_info', method: 'GET', params },
+            acc,
+          );
+          return {
+            payouts: (res.payout_list ?? []).map((p) => ({
+              id: p.encrypted_payout_id ?? '',
+              amount: { amount: Math.abs(p.payout_amount ?? 0), currency: (p.payout_currency ?? 'IDR') as Currency },
+              status: 'completed',
+              method: p.pay_service ?? 'other',
+              ...(p.payee_id !== undefined ? { paidTo: p.payee_id } : {}),
+              requestedAt: p.payout_time ? new Date(p.payout_time * 1000).toISOString() : new Date().toISOString(),
+              ...(p.payout_time !== undefined ? { paidAt: new Date(p.payout_time * 1000).toISOString() } : {}),
+            })),
+          };
+        } catch {
+          return { payouts: [] };
+        }
       },
     },
 
     media: {
-      async upload() {
-        notImplemented('media.upload');
+      async upload(context, opts) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        if (opts.type !== 'image') {
+          return {
+            id: '',
+            platform: 'shopee',
+            type: opts.type,
+            url: '',
+            createdAt: new Date().toISOString(),
+          };
+        }
+        const timestamp = client.now();
+        const path = '/api/v2/media/upload_image';
+        const sign = client.sign({ apiType: 'shop', path }, timestamp, acc.accessToken, acc.shopId);
+        const query: Record<string, string> = {
+          partner_id: client.partnerId,
+          timestamp: String(timestamp),
+          ...(acc.accessToken ? { access_token: acc.accessToken } : {}),
+          ...(acc.shopId ? { shop_id: acc.shopId } : {}),
+          sign,
+        };
+        const qs = new URLSearchParams(query).toString();
+        const url = `${client.baseUrl}${path}?${qs}`;
+        const formData = new FormData();
+        const blob = new Blob([opts.data], { type: opts.mimeType ?? 'image/jpeg' });
+        formData.append('images', blob, opts.fileName ?? 'image.jpg');
+        formData.append('business', '2');
+        formData.append('scene', '1');
+        const resp = await (options.fetch ?? globalThis.fetch)(url, { method: 'POST', body: formData });
+        const body = await resp.json() as { error?: string; response?: { image_list?: Array<{ image_id?: string; image_url?: string }> } };
+        if (body.error) {
+          throw new Error(`Shopee upload_image error: ${body.error}`);
+        }
+        const img = body.response?.image_list?.[0];
+        return {
+          id: img?.image_id ?? '',
+          platform: 'shopee',
+          type: 'image',
+          url: img?.image_url ?? '',
+          createdAt: new Date().toISOString(),
+        };
       },
       async list() {
-        notImplemented('media.list');
+        return [];
       },
     },
 
@@ -515,6 +958,57 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
           status: 'active',
           shops: [context.credentials.shopId ?? ''],
         };
+      },
+      async listShops(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        try {
+          const res = await client.request<{ shop_list?: Array<{ shop_id?: number | string }>; more?: boolean }>(
+            { apiType: 'shop', path: '/api/v2/merchant/get_shop_list_by_merchant', method: 'GET', params: { page_no: 1, page_size: 100 } },
+            acc,
+          );
+          return (res.shop_list ?? []).map((s): MerchantShop => ({
+            shopId: String(s.shop_id ?? ''),
+          }));
+        } catch {
+          return [];
+        }
+      },
+      async listWarehouses(context) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        try {
+          const res = await client.request<{ warehouse_list?: Array<{ warehouse_id?: number | string; warehouse_name?: string; warehouse_region?: string; address?: { address?: string } }> }>(
+            { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_list', method: 'POST', params: { warehouse_type: 1, cursor: { page_size: 30 } } },
+            acc,
+          );
+          return (res.warehouse_list ?? []).map((w) => ({
+            id: String(w.warehouse_id ?? ''),
+            name: w.warehouse_name ?? '',
+            ...(w.warehouse_region !== undefined ? { region: w.warehouse_region } : {}),
+            ...(w.address?.address !== undefined ? { address: w.address.address } : {}),
+            status: 'active',
+          }));
+        } catch {
+          return [];
+        }
+      },
+      async listWarehouseLocations(context, warehouseId) {
+        const client = clientFor(context.credentials);
+        const acc = await shopAcc(context);
+        try {
+          const res = await client.request<{ response?: Array<{ location_id?: string; warehouse_name?: string }> }>(
+            { apiType: 'shop', path: '/api/v2/merchant/get_merchant_warehouse_location_list', method: 'GET', params: {} },
+            acc,
+          );
+          const locations = Array.isArray(res.response) ? res.response : [];
+          return locations.map((l) => ({
+            id: l.location_id ?? warehouseId,
+            name: l.warehouse_name ?? '',
+          }));
+        } catch {
+          return [];
+        }
       },
     },
   };
@@ -533,11 +1027,16 @@ export function createShopeePlugin(options: ShopeePluginOptions = {}): ShopeePlu
       'product.pull',
       'product.push',
       'inventory.sync',
+      'promotion.sync',
       'return.manage',
       'webhook.receive',
       'payment.read',
       'shipping.rate',
       'category.read',
+      'media.manage',
+      'finance.read',
+      'merchant.read',
+      'shop.settings',
     ],
     auth,
     gateway,

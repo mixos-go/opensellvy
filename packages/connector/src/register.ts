@@ -1,5 +1,6 @@
 import type { PlatformCode } from '@opensellvy/types';
 import type { PlatformPlugin } from './base.connector';
+import { assertCapabilitiesImplementable } from './capabilities';
 
 const registry = new Map<PlatformCode, PlatformPlugin>();
 
@@ -24,6 +25,16 @@ export function registerPlatform(plugin: PlatformPlugin, options: RegisterOption
     throw new RegisterError(
       `Platform "${plugin.platform}" sudah terdaftar (${existing.name}). ` +
         'Pakai { replace: true } untuk menimpa, atau pastikan hanya satu adapter per platform.',
+      plugin.platform,
+    );
+  }
+  const missing = assertCapabilitiesImplementable(plugin);
+  if (missing.length > 0) {
+    throw new RegisterError(
+      `Platform "${plugin.platform}" mendeklarasikan capability yang tidak didukung gateway:\n` +
+        '  - ' + missing.join('\n  - ') +
+        '\nCek CAPABILITY_METHODS di @opensellvy/connector. Hilangkan capability yang platform ini ' +
+        'tidak sediakan, atau lengkapi method gateway yang dibutuhkan.',
       plugin.platform,
     );
   }

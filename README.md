@@ -13,7 +13,7 @@ packages/
   module/              @opensellvy/module       18 domain modules (business logic)
   api/                 @opensellvy/api          GraphQL + REST (webhook/oauth)
   ui/                  @opensellvy/ui           React components
-  opensellvy/          opensellvy               umbrella SDK entry
+  sdk/                 @opensellvy/sdk           umbrella SDK entry (types+core+connector+module+api+db+db-pg)
   platform-shopee/     @opensellvy/platform-shopee           plugin
   platform-tts-tokopedia/ @opensellvy/platform-tts-tokopedia plugin
   platform-lazada/     @opensellvy/platform-lazada           plugin
@@ -35,7 +35,7 @@ Dependency rule (tidak boleh dilanggar): core/module TIDAK import `@opensellvy/p
 ## Usage
 
 ```typescript
-import { OpenSellvy } from 'opensellvy';
+import { OpenSellvy } from '@opensellvy/sdk';
 import { registerShopee } from '@opensellvy/platform-shopee';
 import { registerTokopedia } from '@opensellvy/platform-tts-tokopedia';
 

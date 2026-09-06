@@ -37,6 +37,9 @@ export function dummyPlugin(hooks: LocalPluginHooks = {}): PlatformPlugin {
       shop: {
         getProfile: () => Promise.resolve(baseShop),
         updateProfile: () => Promise.resolve(),
+        getSettings: () => Promise.resolve({ platformShopId: 'shop-local', holidayMode: false, warehouses: [] }),
+        setHolidayMode: () => Promise.resolve(),
+        listWarehouses: () => Promise.resolve([]),
       },
       order: {
         pull: () => Promise.resolve(hooks.orders ?? []),
@@ -88,12 +91,21 @@ export function dummyPlugin(hooks: LocalPluginHooks = {}): PlatformPlugin {
         update: () => Promise.resolve(),
         setActive: () => Promise.resolve(),
       },
+      finance: {
+        overview: () => Promise.resolve({}),
+        transactions: () => Promise.resolve([]),
+        statement: () => Promise.resolve({ id: '', fileName: '', status: 'generating' }),
+        payoutInfo: () => Promise.resolve({ payouts: [] }),
+      },
       media: {
         upload: () => Promise.reject(new Error('not implemented')),
         list: () => Promise.resolve([]),
       },
       merchant: {
         getProfile: () => Promise.reject(new Error('not implemented')),
+        listShops: () => Promise.resolve([]),
+        listWarehouses: () => Promise.resolve([]),
+        listWarehouseLocations: () => Promise.resolve([]),
       },
     },
     webhook: {

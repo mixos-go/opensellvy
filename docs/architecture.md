@@ -39,7 +39,7 @@ di-omit/null oleh adapter.
 ## Dependency direction (wajib)
 
 ```
-types ← core ← connector ← module ← api ← opensellvy (umbrella)
+types ← core ← connector ← module ← api ← sdk (@opensellvy/sdk)
        ← db
        ← platform-* (implements connector contract)
        ← platform-local (adapter bukti one-gate, tanpa HTTP)

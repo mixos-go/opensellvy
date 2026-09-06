@@ -10,7 +10,7 @@
  *  4) order.fulfill → status machine
  *  5) produk didorong ke channel; stok disinkronkan ke "marketplace"
  */
-import { OpenSellvy } from 'opensellvy';
+import { OpenSellvy } from '@opensellvy/sdk';
 import type { TokenStore } from '@opensellvy/connector';
 import { registerLocal, getLocalStore } from '@opensellvy/platform-local';
 

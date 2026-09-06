@@ -15,7 +15,15 @@ import type {
   InventoryAdjustment,
   MediaAsset,
   MerchantProfile,
+  MerchantWarehouse,
+  MerchantShop,
   ShopProfilePatch,
+  ShopSettings,
+  FinanceOverview,
+  WalletTransaction,
+  FinanceStatement,
+  PayoutInfo,
+  FinanceQuery,
 } from '@opensellvy/types';
 import type { ConnectorContext, OAuthToken } from './connector.types';
 
@@ -33,7 +41,10 @@ export type Capability =
   | 'payment.read'
   | 'shipping.rate'
   | 'category.read'
-  | 'media.manage';
+  | 'media.manage'
+  | 'finance.read'
+  | 'merchant.read'
+  | 'shop.settings';
 
 export interface PlatformAuth {
   getAuthorizeUrl(context: ConnectorContext): Promise<string>;
@@ -76,6 +87,10 @@ export interface PlatformGateway {
   shop: {
     getProfile(context: ConnectorContext): Promise<PlatformShopProfile>;
     updateProfile(context: ConnectorContext, patch: ShopProfilePatch): Promise<void>;
+    /** Pengaturan operasional shop (holiday mode, daftar gudang). */
+    getSettings(context: ConnectorContext): Promise<ShopSettings>;
+    setHolidayMode(context: ConnectorContext, enabled: boolean): Promise<void>;
+    listWarehouses(context: ConnectorContext): Promise<MerchantWarehouse[]>;
   };
 
   /** Siklus hidup pesanan. */
@@ -142,6 +157,14 @@ export interface PlatformGateway {
     setActive(context: ConnectorContext, promotionId: string, active: boolean): Promise<void>;
   };
 
+  /** Finansial: ringkasan income, transaksi wallet, laporan & payout. */
+  finance: {
+    overview(context: ConnectorContext): Promise<FinanceOverview>;
+    transactions(context: ConnectorContext, query?: FinanceQuery): Promise<WalletTransaction[]>;
+    statement(context: ConnectorContext, opts?: { from?: Date; to?: Date }): Promise<FinanceStatement>;
+    payoutInfo(context: ConnectorContext): Promise<PayoutInfo>;
+  };
+
   /** Aset & media ter-hosting platform (gambar/video). */
   media: {
     upload(
@@ -154,6 +177,9 @@ export interface PlatformGateway {
   /** Profil merchant/brand level platform. */
   merchant: {
     getProfile(context: ConnectorContext): Promise<MerchantProfile>;
+    listShops(context: ConnectorContext): Promise<MerchantShop[]>;
+    listWarehouses(context: ConnectorContext): Promise<MerchantWarehouse[]>;
+    listWarehouseLocations(context: ConnectorContext, warehouseId: string): Promise<MerchantWarehouse[]>;
   };
 }
 

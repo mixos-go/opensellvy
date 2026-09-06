@@ -55,6 +55,34 @@ export interface MerchantProfile {
   shops: string[];
 }
 
+/** Repositori/fasilitas fisik level merchant, dipakai untuk fulfillment. */
+export interface MerchantWarehouse {
+  id: ID;
+  name: string;
+  isHq?: boolean;
+  region?: string;
+  address?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+/** Shop milik merchant pada platform. */
+export interface MerchantShop {
+  shopId: ID;
+  shopCb?: boolean;
+  isDisabled?: boolean;
+  accountRegion?: string;
+  name?: string;
+}
+
+/** Pengaturan operasional sebuah shop di platform (non-profil). */
+export interface ShopSettings {
+  platformShopId: string;
+  holidayMode: boolean;
+  warehouses: MerchantWarehouse[];
+  notificationEnabled?: boolean;
+}
+
 export type VoucherStatus = 'draft' | 'scheduled' | 'active' | 'paused' | 'ended' | 'deleted';
 
 export interface Voucher {

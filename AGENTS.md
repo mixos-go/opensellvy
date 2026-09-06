@@ -40,7 +40,7 @@ packages/
   platform-tts-tokopedia/  stub (belum diimplementasi)
   platform-lazada/         stub (belum diimplementasi)
   platform-blibli/         stub (belum diimplementasi)
-  opensellvy/       opensellvy                 Umbrella SDK (OpenSellvy, defineConfig, credentials resolver)
+  sdk/              @opensellvy/sdk            Umbrella SDK instalable (OpenSellvy, defineConfig, + subpath export semua package non-platform: /connector /module /api /core /db /db-pg)
   ui/               @opensellvy/ui             (kosong/belum aktif — fase akhir)
 ```
 
@@ -51,7 +51,7 @@ packages/
 
 Setiap package self-contained, exports `dist/index.{js,d.ts}` via `tsup`, test dengan `vitest`.
 Package **hanya** boleh depend pada package yang dideklarasikan di `dependencies`-nya.
-Arah dependency (memori): `types ← core ← connector ← module ← api ← opensellvy`, dan
+Arah dependency (memori): `types ← core ← connector ← module ← api ← sdk`, dan
 platform adapters `↔ registry (connector)` via register (bukan di-import balik).
 
 ### 3.1 `@opensellvy/types` — bezaz platform, pusat domain
@@ -121,10 +121,13 @@ platform adapters `↔ registry (connector)` via register (bukan di-import balik
   29 kategori). Response dibangun pakai **boundary rule + dedup nama** (doc flat tanpa sinyal depth).
   JANGAN edit file di `src/generated/` langsung — ubah generator lalu `generate`.
 
-### 3.10 `opensellvy` — umbrella SDK
-- `deps`: types, core, db, connector, module, api. `src/sdk.ts` (`OpenSellvy` → `await sdk.open()`,
+### 3.10 `@opensellvy/sdk` — umbrella SDK instalable (bundle SEMUA package non-platform)
+- `deps`: types, core, db, db-pg, connector, module, api. `src/sdk.ts` (`OpenSellvy` → `await sdk.open()`,
   inject repos via `config.databaseUrl`, fallback memory), `src/config.ts` (`defineConfig`, `PlatformConfig`,
   `defaultCredentials`), `src/errors.ts`.
+- **Bundle semua non-platform:** main entry `src/index.ts` re-export `@opensellvy/types` + `OpenSellvy`/`defineConfig`/errors;
+  **subpath export** `@opensellvy/sdk/{connector,module,api,core,db,db-pg}` (collision-free) via `src/<sub>.ts`
+  (masing-masing `export * from '@opensellvy/<pkg>'`). Platform adapter TIDAK masuk bundle — plugin eksternal.
 - Rules: wiring `repos`/`repositories`; **tidak boleh import platform-* langsung** — platform didaftarkan
   lewat registry oleh pemakai.
 

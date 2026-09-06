@@ -16,6 +16,44 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-03]` Pos: `@opensellvy/sdk` + enforcement capability-driven + gateway Shopee LENGKAP + docs universal ✅ (belum commit)
+
+- **Keputusan user (session ini):**
+  1. Transformasi umbrella `opensellvy` → **`@opensellvy/sdk`** (bundle SEMUA package non-platform) ✓.
+  2. Wajibkan SEMUA method gateway terimplementasi → **capability-driven enforcement** ✓.
+  3. Complete-kan impl gateway Shopee yg belum (payment/promotion/media/inventory/shipping/returns:cancel),
+     **implementasi nyata + siap live-verify sandbox** ✓.
+  4. **Checklist universal per-platform** + **dokumentasi pattern** ✓.
+- **`@opensellvy/sdk` (BARU, example: dir `packages/opensellvy` → `packages/sdk`):** main entry `src/index.ts`
+  re-export `@opensellvy/types` + `OpenSellvy`/`defineConfig`/errors; **subpath export** `./connector ./module
+  ./api ./core ./db ./db-pg` (collision-free, masing-masing `export *`). `dependencies`: types/core/connector/
+  module/api/db/db-pg (workspace:*). Salah satu `@ts-expect-error` di `sdk.ts` dihapus (db-pg kini dep keras).
+  Referensi diupdate: root `package.json` (`"@opensellvy/sdk": "workspace:*"`), `examples/local-gate.mts`,
+  `README.md`, `AGENTS.md` (struktur + §3.10 + arah dependency), `docs/architecture.md`.
+- **Enforcement capability-driven (`@opensellvy/connector` — additive, bukan breaking utk ada adapter):**
+  - `src/capabilities.ts` BARU: `NotImplementedError` (sentinel), `CAPABILITY_METHODS` (capability→domain
+    gateway) = checklist universal, `collectRequiredMethods`, `assertCapabilitiesImplementable`,
+    `assertNoStubMethods` (helper conformance utk dipanggil tiap adapter test).
+  - `registerPlatform()` kini memvalidasi: capability terdeklarasi wajib punya domain gateway non-kosong
+    (lempar `RegisterError` bila tidak). Index `connector` mengekspor capabilities.
+- **Gateway Shopee LENGKAP (`platform-shopee`):** semua 14 method yg tadinya `notImplemented` kini real
+  via `client.request`: inventory getStockLevels (`get_item_list`+`get_model_list`)/adjust (`update_stock`),
+  shipping listShipments (`get_order_list`) / getShipment (`get_tracking_info`), payment list/get/refund
+  (escrow), promotion list/get/update/setActive (discount), media upload (`upload_image`)/list(`[]`),
+  returns.act:cancel (`cancel_dispute`). Helper `notImplemented` kini throw `NotImplementedError`.
+  `capabilities` ditambah `promotion.sync` + `media.manage`. `tests/conformance.spec.ts` BARU
+  (`assertNoStubMethods` PASS). **33 test hijau.**
+  - **Live-verify:** `live-gateway.ts` siap (`SHOPEE_ACCESS_TOKEN` env-only, jangan commit). Token env TIDAK
+    tersedia di env ini → live verify BELUM dijalankan; jalankan saat token ada.
+- **Docs:** `docs/connectors/_UNIVERSAL.md` (pattern + checklist universal per capability + enforcement +
+  aturan maintenance) + `docs/connectors/shopee.md` (pemetaan capability→endpoint referensi). Fix `*/` di
+  docblock capabilities.ts (premature comment close).
+- **Test & build (non-db-pg hijau):** core 50 · connector 10 · module 53 · api 21 · sdk 6 · platform-local 4 ·
+  platform-shopee **33** = **177** (db-pg 15 butuh Postgres). Full monorepo **typecheck 0** (14 paket) & **build
+  serial sukses** (exit 0). Lint paket yg diubah hijau.
+- **Belum commit** (user belum minta). TODO berikutnya: live-verify shopee dgn token (jalankan `live-gateway.ts`),
+  lalu `pnpm check` penuh (termasuk db-pg dgn Postgres), lalu commit sekali bila diinginkan.
+
 ### `[2026-09-03]` Pos: API internal di-scale penuh — module platform-sync + REST expose grouped `PlatformGateway` ✅ (belum commit)
 
 - **Konteks (keputusan user):** kontrak gate sudah di-scale (grouped-by-domain). Sekarang API internal (module + REST)

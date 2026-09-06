@@ -16,6 +16,13 @@ import type {
   TrackingEvent,
   UnifiedOrder,
   UnifiedProduct,
+  ShopSettings,
+  MerchantWarehouse,
+  MerchantShop,
+  FinanceOverview,
+  WalletTransaction,
+  FinanceStatement,
+  PayoutInfo,
 } from '@opensellvy/types';
 import type { PlatformPlugin, PlatformShopProfile, ReturnAction } from '@opensellvy/connector';
 import { registerPlatform } from '@opensellvy/connector';
@@ -56,6 +63,9 @@ export function createLocalPlugin(options: LocalPluginOptions = {}): PlatformPlu
       'shipping.rate',
       'category.read',
       'media.manage',
+      'finance.read',
+      'merchant.read',
+      'shop.settings',
     ],
     auth: {
       getAuthorizeUrl: (_ctx) => Promise.resolve('memory://local/authorize?shop=local'),
@@ -71,6 +81,19 @@ export function createLocalPlugin(options: LocalPluginOptions = {}): PlatformPlu
             marketplace: store.shop.marketplace,
           }),
         updateProfile: (_context, _patch: ShopProfilePatch) => Promise.resolve(),
+        getSettings: (): Promise<ShopSettings> =>
+          Promise.resolve({
+            platformShopId: store.shop.platformShopId,
+            holidayMode: false,
+            warehouses: [
+              { id: 'wh-default', name: 'Default Warehouse', status: 'active' },
+            ],
+          }),
+        setHolidayMode: (_context, _enabled) => Promise.resolve(),
+        listWarehouses: (): Promise<MerchantWarehouse[]> =>
+          Promise.resolve([
+            { id: 'wh-default', name: 'Default Warehouse', status: 'active' },
+          ]),
       },
 
       order: {
@@ -292,6 +315,23 @@ export function createLocalPlugin(options: LocalPluginOptions = {}): PlatformPlu
         },
       },
 
+      finance: {
+        overview: (): Promise<FinanceOverview> =>
+          Promise.resolve({
+            lastPayoutAt: new Date().toISOString(),
+          }),
+        transactions: (_context, _query): Promise<WalletTransaction[]> =>
+          Promise.resolve([]),
+        statement: (_context, _opts): Promise<FinanceStatement> =>
+          Promise.resolve({
+            id: '',
+            fileName: '',
+            status: 'generating',
+          }),
+        payoutInfo: (): Promise<PayoutInfo> =>
+          Promise.resolve({ payouts: [] }),
+      },
+
       media: {
         upload: (_context, opts): Promise<MediaAsset> => {
           mediaSeq.n += 1;
@@ -318,6 +358,18 @@ export function createLocalPlugin(options: LocalPluginOptions = {}): PlatformPlu
             status: 'active',
             shops: [store.shop.platformShopId],
           }),
+        listShops: (): Promise<MerchantShop[]> =>
+          Promise.resolve([
+            { shopId: store.shop.platformShopId },
+          ]),
+        listWarehouses: (): Promise<MerchantWarehouse[]> =>
+          Promise.resolve([
+            { id: 'wh-default', name: 'Default Warehouse', status: 'active' },
+          ]),
+        listWarehouseLocations: (_context, _warehouseId): Promise<Array<{ id: string; name: string }>> =>
+          Promise.resolve([
+            { id: 'wh-loc-default', name: 'Default Location' },
+          ]),
       },
     },
     webhook: {

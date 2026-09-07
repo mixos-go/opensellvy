@@ -1,0 +1,34 @@
+{
+  "name": "@opensellvy/app-auth",
+  "version": "0.0.1",
+  "private": true,
+  "description": "SSO/RBAC shared — satu pintu login untuk apps/server, apps/web, apps/admin",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/run.ts",
+    "start": "tsx src/run.ts",
+    "build": "tsup src/run.ts --format esm --clean",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@opensellvy/core": "workspace:*",
+    "@opensellvy/types": "workspace:*",
+    "@opensellvy/module": "workspace:*",
+    "@opensellvy/db-pg": "workspace:*",
+    "@opensellvy/db": "workspace:*",
+    "hono": "^4.13.5",
+    "@hono/node-server": "^2.1.1",
+    "pg": "^8.13.1",
+    "drizzle-orm": "^0.43.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  },
+  "license": "MIT"
+}

@@ -42,10 +42,14 @@ packages/
   platform-blibli/         stub (belum diimplementasi)
   sdk/              @opensellvy/sdk            Umbrella SDK instalable (OpenSellvy, defineConfig, + subpath export semua package non-platform: /connector /module /api /core /db /db-pg)
   ui/               @opensellvy/ui             Aktif: shadcn/ui 60 primitives + komponen platform (lazada/blibli "Soon")
+apps/
+  auth/             @opensellvy/app-auth        SSO/RBAC service terpisah (satu pintu, port 4100): /auth/*
+  server/           @opensellvy/app-server      Backend server OMS (port 4200): kompos @opensellvy/api + sdk + db-pg
+  web/              (belum dibuat — frontend, konsumsi auth & server; dibuat setelah server & auth)
 ```
 
-- Root scripts: `pnpm check` (typecheck+lint+build+test), `build` (serial), `demo:local`.
-- `pnpm-workspace.yaml` mencakup `packages/*`.
+- Root scripts: `pnpm check` (typecheck+lint+build+test), `build` (serial), `dev` (concurrent: dev:auth + dev:server + api), `dev:auth`, `dev:server`, `demo:local`.
+- `pnpm-workspace.yaml` mencakup `packages/*` + `apps/*`.
 
 ## 3. Pola & rules PER-PACKAGE (detail — wajib dipatuhi)
 
@@ -150,6 +154,25 @@ platform adapters `↔ registry (connector)` via register (bukan di-import balik
   (lazada & blibli status "Soon"). Stub kosong lama (DataTable/OrderStatusBadge/PlatformIcon/useOrder/
   useProduct/AuthProvider/ThemeProvider) masih 0-byte. Stack detail + jebakan CLI (`add --all` gagal utk
   5 item yang 404 di registry new-york-v4; fix `exactOptionalPropertyTypes` di 5 file) → **TODO STATE TRACKER #4**.
+
+### 3.12 Apps — SSO & backend server (dashboard/seller portal, dibangun di monorepo dulu)
+- **Keputusan (2026-09-07):** iterasi full app di monorepo (`apps/*`) dulu; pisah ke SaaS/repo terpisah setelah
+  stabil. SDK `@opensellvy/*` sdh siap publish (`"type":"module"` + `moduleResolution: bundler`). Arah depend
+  paket tetap dijaga: apps BOLEH import `@opensellvy/platform-*` langsung (bukan module/sdk/api).
+- **`apps/auth`** (`@opensellvy/app-auth`, port 4100) — **SSO/RBAC service terpisah, satu pintu**:
+  `createAuthApp(config)` → Hono di `src/index.ts` (murni library, routes `/health` + `/auth/{login,refresh,logout,me}`);
+  bootstrap di `src/run.ts` (entry CLI `dev`/`start`). Auth via `createAuthService(createPgAuthDeps(db, jwtSecret))`
+  bila `databaseUrl`, fallback memory (user dev `dev@opensellvy.test`/`admin123`). Export `memoryRefreshSessionStore`,
+  `memoryAuthDeps`, `createAuthApp`, `createDatabase` (`apps/auth/src/db.ts`).
+- **`apps/server`** (`@opensellvy/app-server`, port 4200) — backend server OMS: `buildServerApp(config)` di
+  `src/index.ts` → `createServer` (`@opensellvy/api`) dgn `sdk.open()` + `authService` dari `createPgAuthDeps`
+  (JWT interoperable dgn apps/auth — SSO satu pintu via shared `jwtSecret` + DB sama). `registerLocal()` dipanggil.
+  Bootstrap di `src/run.ts`. `createDatabase` di `apps/server/src/db.ts`.
+- **Jebakan versi dep WAJIB:** apps/auth & apps/server pakai `drizzle-orm@^0.43.1` + `pg@^8.13.1` + `@types/pg`
+  (SAMA dgn db/db-pg). Version lain (mis. `0.36`) → type error `ExtractTablesWithRelations` antar-paket.
+- **`apps/web`** — belum dibuat (frontend; dibuat setelah server & auth, sesuai urutan user). Konsumsi
+  `@opensellvy/ui` + auth/server.
+- **Test:** apps/auth 2 (login/me/refresh/logout via memory + 401 salah password). `pnpm check` = 244 test.
 
 ---
 

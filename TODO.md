@@ -16,6 +16,28 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-07 #6]` Pos: mana mana apps/auth (SSO) & apps/server (backend OMS) — "pembuatan penuh disini dulu" ✅
+
+- **Keputusan:** iterasi full app DI MONOREPO dulu (`apps/*`); pisah ke SaaS terpisah setelah stabil (SDK
+  `@opensellvy/*` sdh siap di-publish karena `"type":"module"` + `moduleResolution: bundler` + dist d.ts bersih).
+- **Arsitektur (3 jenis):** `apps/auth` (SSO/RBAC shared, satu pintu) + `apps/server` (backend OMS, consume auth)
+  + `apps/web` (frontend, nanti). Dibangun server & auth DULU, web menyusul (sesuai permintaan user).
+- **`apps/auth`** (`@opensellvy/app-auth`, port 4100): service Hono SSO/RBAC.
+  - `createAuthApp(config)` + `run.ts` (CLI). Routes `/health`, `POST /auth/{login,refresh,logout}`, `GET /auth/me`.
+  - Auth service: `createAuthService(createPgAuthDeps(db, jwtSecret))` bila `databaseUrl`; fallback memory mode
+    (user dev `dev@opensellvy.test`/`admin123`) tanpa DB — di-test.
+  - Re-export helper: `memoryRefreshSessionStore`, `memoryAuthDeps`, `createAuthApp`, `createDatabase`.
+- **`apps/server`** (`@opensellvy/app-server`, port 4200): backend OMS kompos `@opensellvy/api`.
+  - `buildServerApp(config)` → `createServer(...)` dgn `sdk.open()` (repos Postgres) + `authService` dari
+    `createPgAuthDeps` (JWT interoperable dgn apps/auth — SSO satu pintu via shared jwtSecret + DB sama).
+  - `registerLocal()` (platform adapter) didaftarkan; `run.ts` CLI start.
+- **Workspace:** `pnpm-workspace.yaml` + `apps/*`. **`pnpm check` HIJAU: test 244** (sebelumnya 242; apps/auth +2).
+- **Catatan penting — versi dep:** apps/auth & apps/server wajib `drizzle-orm@^0.43.1` + `pg@^8.13.1` + `@types/pg`
+  (SAMA dgn db/db-pg); versi lain (mis. 0.36) → type mismatch `ExtractTablesWithRelations` antar-paket.
+- **Belum:** `apps/web` (frontend) — sesuai rencana dibuat setelah server & auth. Boot index.ts murni library;
+  bootstrap lewat `run.ts`. CORS `buildApp` masih hardcode `'*'` (ApiConfig.corsOrigin belum diteruskan ke
+  middleware — open item).
+
 ### `[2026-09-07 #5b]` Pos: query "toko milik seller" — `members.findByUser` + `users.listStoresForUser` ✅
 
 - Lanjutan #5 (multi-store seller): `MemberRepository` port + `findByUser(userId)` — semua toko tempat seorang

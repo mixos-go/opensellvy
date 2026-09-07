@@ -168,6 +168,7 @@ export class MemoryRepositories {
       return updated;
     },
     findByStore: async (storeId: string) => [...this.members.values()].filter((m) => m.storeId === storeId),
+    findByUser: async (userId: string) => [...this.members.values()].filter((m) => m.userId === userId),
     find: async (storeId: string, userId: string) => this.members.get(`${storeId}:${userId}`),
   };
 

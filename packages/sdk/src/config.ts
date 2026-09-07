@@ -1,9 +1,19 @@
 import type { PlatformCode } from '@opensellvy/types';
 
+export interface AuthConfig {
+  jwtSecret: string;
+  issuer?: string;
+  audience?: string;
+  accessTokenTtlSeconds?: number;
+  refreshTokenTtlSeconds?: number;
+}
+
 export interface OpenSellvyConfig {
   environment?: 'production' | 'sandbox';
   databaseUrl?: string;
   platforms?: Partial<Record<PlatformCode, PlatformConfig>>;
+  /** core/auth: buat AuthService via `sdk.auth` (users/members dari repos + session store). */
+  auth?: AuthConfig;
 }
 
 export interface PlatformConfig {

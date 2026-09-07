@@ -125,6 +125,10 @@ platform adapters `↔ registry (connector)` via register (bukan di-import balik
 - `deps`: types, core, db, db-pg, connector, module, api. `src/sdk.ts` (`OpenSellvy` → `await sdk.open()`,
   inject repos via `config.databaseUrl`, fallback memory), `src/config.ts` (`defineConfig`, `PlatformConfig`,
   `defaultCredentials`), `src/errors.ts`.
+- **Auth (core/auth) ter-wire:** `config.auth.jwtSecret` → getter **`sdk.auth`** (lazy) membangun AuthService
+  dari repos (`findUserByEmail`/`getMemberRole` dari port users/members, DB-agnostic) + session store
+  (option `authSessions` → Postgres bila `databaseUrl` → memory). Pass `authService: await sdk.auth` ke
+  `createServer`. `User.passwordHash` optional (domain) — db-pg persiste ke kolom `password_hash`.
 - **Bundle semua non-platform:** main entry `src/index.ts` re-export `@opensellvy/types` + `OpenSellvy`/`defineConfig`/errors;
   **subpath export** `@opensellvy/sdk/{connector,module,api,core,db,db-pg}` (collision-free) via `src/<sub>.ts`
   (masing-masing `export * from '@opensellvy/<pkg>'`). Platform adapter TIDAK masuk bundle — plugin eksternal.

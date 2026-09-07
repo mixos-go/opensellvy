@@ -11,6 +11,8 @@ export interface User {
   email: string;
   name: string;
   status: UserStatus;
+  /** scrypt hash (core/auth) — tidak boleh ter-expose ke publik; diisi saat user dibuat. */
+  passwordHash?: string;
   createdAt: ISO8601;
   updatedAt: ISO8601;
 }

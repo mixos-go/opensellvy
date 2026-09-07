@@ -8,6 +8,8 @@ export interface UserModuleImpl {
   addMember(storeId: string, userId: string, role: UserRole): Promise<StoreMember>;
   listMembers(storeId: string): Promise<StoreMember[]>;
   changeRole(storeId: string, userId: string, role: UserRole): Promise<StoreMember>;
+  /** semua toko (storeId) tempat user menjadi anggota, beserta role per toko. */
+  listStoresForUser(userId: string): Promise<StoreMember[]>;
 }
 
 export function userModule(deps: ModuleDeps): UserModuleImpl {
@@ -36,6 +38,10 @@ export function userModule(deps: ModuleDeps): UserModuleImpl {
 
     async listMembers(storeId) {
       return repos.members.findByStore(storeId);
+    },
+
+    async listStoresForUser(userId) {
+      return repos.members.findByUser(userId);
     },
 
     async changeRole(storeId, userId, role) {

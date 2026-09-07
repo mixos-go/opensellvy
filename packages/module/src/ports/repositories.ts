@@ -83,6 +83,8 @@ export interface MemberRepository {
   add(member: StoreMember): Promise<void>;
   update(storeId: string, userId: string, patch: Partial<StoreMember>): Promise<StoreMember>;
   findByStore(storeId: string): Promise<StoreMember[]>;
+  /** semua toko tempat seorang user menjadi anggota (dengan role per toko). */
+  findByUser(userId: string): Promise<StoreMember[]>;
   find(storeId: string, userId: string): Promise<StoreMember | undefined>;
 }
 

@@ -16,6 +16,43 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-07 #5b]` Pos: query "toko milik seller" — `members.findByUser` + `users.listStoresForUser` ✅
+
+- Lanjutan #5 (multi-store seller): `MemberRepository` port + `findByUser(userId)` — semua toko tempat seorang
+  user menjadi anggota beserta role per toko (query sebaliknya dari `findByStore`).
+- Impl di memory (`membersRepo.findByUser`) & db-pg (`membersRepo.findByUser` — query `store_members` by `user_id`).
+- Service `users.listStoresForUser(userId)` di `@opensellvy/module` diexpose.
+- Test: `user-audit.spec.ts` — seller anggota 2 toko (owner + admin), `findByUser` & `listStoresForUser` benar;
+  user tanpa toko → `[]`. **`pnpm check` HIJAU, test 242** (module 54 +1).
+- Notes: data relasi M:N sudah tersimpan sebelumnya di `store_members` (schema.ts) — hanya kini lookup by-user
+  di-expose end-to-end (port → memory → db-pg → service).
+
+### `[2026-09-07 #5]` Pos: auth internal (core/auth) ter-wire ke SDK (`sdk.auth`) — "auth, db kita" ✅
+
+- **TTS + UI commit DONE:** `26ec291` (TTS) & `997c019` (ui shadcn) sudah di-push ke `main`.
+- **Domain `User`** (`@opensellvy/types/domain/user.ts`): + `passwordHash?: string` (optional; scrypt hash,
+  jangan di-expose publik). Non-breaking (optional field).
+- **`@opensellvy/db-pg`:** `usersRepo.save` sekarang persist `password_hash` kolom (insert `?? ''`, conflict-update
+  hanya bila hash di-set); `mapUser` mengembalikan `passwordHash` (conditional spread) → `findByEmail/findById`
+  hasil karya core/auth.
+- **`@opensellvy/sdk` wiring auth:**
+  - `config.ts`: `AuthConfig` baru (`jwtSecret` + issuer/audience/TTL optional) di `OpenSellvyConfig.auth`.
+  - `sdk.ts`: `OpenSellvyOptions.authSessions?: RefreshSessionStore`; **`sdk.auth`** (getter, lazy, cache) →
+    `buildAuthService(config.auth, repos, sessions)`. repos default: `createMemoryRepositories()` bila tanpa
+    provider (SDK kini memegang instance — sebelumnya repos memory dibuat internal di module). Session store:
+    option → Postgres (`createPgRefreshSessionStore`, lazy import) bila `databaseUrl` → memory.
+  - `auth.ts` (baru): `buildAuthService` adapter `findUserByEmail`/`getMemberRole` dari port repositories
+    (DB-agnostic) + `createMemorySessionStore`; diexport via `@opensellvy/sdk` main entry.
+  - Error tanpa jwtSecret: `AUTH_NOT_CONFIGURED`.
+- **Intregasi API (pemakai):** `createServer({ jwtSecret }, { services: sdk.modules, registry: sdk.connectors,
+  authService: await sdk.auth })` → endpoint `POST /api/auth/{login,refresh,logout}` + verifikasi bearer JWT.
+- **Test:** sdk 8 (tambah 2: login/refresh/verify/logout owner via memory repos + error AUTH_NOT_CONFIGURED).
+  **`pnpm check` PENUH HIJAU (EXIT=0): test 241** (core 50 · connector 10 · module 53 · api 21 · db-pg 15 ·
+  sdk 8 · local 4 · shopee 46 · TTS 34).
+- **Belum/terbuka:** domain `User` tanpa hash tapi di-simpan via module `users.createUser` (tidak set hash —
+  untuk saat ini user login dibuat via repos/seed langsung yang set `passwordHash`); belum ada seed auth;
+  blok scrypt N=2^14 (bisa naik); `users.ts` service belum terima passwordHash sebagai input.
+
 ### `[2026-09-06 #4]` Pos: `@opensellvy/ui` aktif dengan shadcn (60 primitives) + daftar platform (lazada/blibli "Soon") ✅
 
 - **TTS commit + push DONE:** `26ec291` `feat(platform-tts-tokopedia): ...` (47 file, 18110+) — push

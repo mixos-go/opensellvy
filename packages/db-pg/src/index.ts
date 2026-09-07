@@ -461,10 +461,17 @@ export class PostgresRepositories {
         id: u.id,
         email: u.email,
         name: u.name,
+        passwordHash: u.passwordHash ?? '',
         status: u.status,
       }).onConflictDoUpdate({
         target: users.id,
-        set: { email: u.email, name: u.name, status: u.status, updatedAt: new Date() },
+        set: {
+          email: u.email,
+          name: u.name,
+          status: u.status,
+          ...(u.passwordHash !== undefined ? { passwordHash: u.passwordHash } : {}),
+          updatedAt: new Date(),
+        },
       });
       return u;
     },
@@ -508,6 +515,17 @@ export class PostgresRepositories {
     },
     findByStore: async (storeId) => {
       const rows = await this.db.select().from(storeMembers).where(eq(storeMembers.storeId, storeId));
+      return rows.map((r) => ({
+        storeId: r.storeId,
+        userId: r.userId,
+        role: r.role as StoreMember['role'],
+        status: r.status as StoreMember['status'],
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+      }));
+    },
+    findByUser: async (userId) => {
+      const rows = await this.db.select().from(storeMembers).where(eq(storeMembers.userId, userId));
       return rows.map((r) => ({
         storeId: r.storeId,
         userId: r.userId,
@@ -805,12 +823,13 @@ function mapStore(r: { id: string; name: string; slug: string; logoUrl: string |
   };
 }
 
-function mapUser(r: { id: string; email: string; name: string; status: string; createdAt: Date; updatedAt: Date }): User {
+function mapUser(r: { id: string; email: string; name: string; passwordHash: string; status: string; createdAt: Date; updatedAt: Date }): User {
   return {
     id: r.id,
     email: r.email,
     name: r.name,
     status: r.status as User['status'],
+    ...(r.passwordHash ? { passwordHash: r.passwordHash } : {}),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };

@@ -1,12 +1,14 @@
 import { connectors } from '@opensellvy/connector';
 import type { ConnectorRegistry } from '@opensellvy/connector';
 import { createServices } from '@opensellvy/module';
-import type { Services, ModuleDeps } from '@opensellvy/module';
+import { createMemoryRepositories } from '@opensellvy/module';
+import type { Services, ModuleDeps, Repositories } from '@opensellvy/module';
+import type { AuthService, RefreshSessionStore } from '@opensellvy/core';
 import type { OpenSellvyConfig } from './config';
 import type { PlatformCode } from '@opensellvy/types';
 import { OpenSellvyError } from './errors';
+import { buildAuthService, createMemorySessionStore } from './auth';
 
-type Repositories = ModuleDeps['repos'];
 type RepositoryProvider = Repositories | (() => Promise<Repositories>);
 
 export interface OpenSellvyOptions {
@@ -16,6 +18,8 @@ export interface OpenSellvyOptions {
    * Default: config.databaseUrl ? Postgres : in-memory.
    */
   repositories?: RepositoryProvider;
+  /** Session store untuk core/auth (default: memory, atau Postgres bila databaseUrl). */
+  authSessions?: RefreshSessionStore;
   tokens?: ModuleDeps['tokens'];
   events?: ModuleDeps['events'];
   credentials?: ModuleDeps['credentials'];
@@ -24,6 +28,8 @@ export interface OpenSellvyOptions {
 
 export class OpenSellvy {
   private services: Services | undefined;
+  private repositories: Repositories | undefined;
+  private authService: AuthService | undefined;
 
   constructor(
     private readonly config: OpenSellvyConfig,
@@ -47,13 +53,42 @@ export class OpenSellvy {
     return connectors;
   }
 
+  /**
+   * core/auth AuthService — dipakai oleh `createServer({ authService })` utk
+   * login/refresh/logout + verifikasi bearer JWT. Butuh `config.auth.jwtSecret`.
+   * findUserByEmail/getMemberRole dari repos (users/members); session store default
+   * memory, atau Postgres (`createPgRefreshSessionStore`) bila config.databaseUrl.
+   */
+  get auth(): Promise<AuthService> {
+    if (this.authService) return Promise.resolve(this.authService);
+    if (!this.config.auth?.jwtSecret) {
+      return Promise.reject(
+        new OpenSellvyError('AUTH_NOT_CONFIGURED', 'Setel config.auth.jwtSecret sebelum akses sdk.auth'),
+      );
+    }
+    return this.initAuth();
+  }
+
+  private async initAuth(): Promise<AuthService> {
+    await this.open();
+    const config = this.config.auth!;
+    const repos = this.repositories!;
+    const sessions =
+      this.options.authSessions ??
+      (this.config.databaseUrl ? await this.pgSessionStore() : createMemorySessionStore());
+    this.authService = buildAuthService(config, repos, sessions);
+    return this.authService;
+  }
+
   private async buildServices(): Promise<Services> {
     const credentials = this.options.credentials ?? this.defaultCredentials();
-    let repositories: Repositories | undefined;
     const provider = this.options.repositories ?? this.defaultRepositoryProvider();
-    if (provider) {
-      repositories = typeof provider === 'function' ? await provider() : provider;
-    }
+    const repositories = provider
+      ? typeof provider === 'function'
+        ? await provider()
+        : provider
+      : createMemoryRepositories();
+    this.repositories = repositories;
     return createServices({
       deps: {
         registry: this.connectors,
@@ -62,8 +97,28 @@ export class OpenSellvy {
         ...(this.options.events !== undefined ? { events: this.options.events } : {}),
         ...(this.options.logger !== undefined ? { logger: this.options.logger } : {}),
       },
-      ...(repositories !== undefined ? { repositories } : {}),
+      repositories,
     });
+  }
+
+  private async pgSessionStore(): Promise<RefreshSessionStore> {
+    const url = this.config.databaseUrl;
+    try {
+      // @ts-expect-error runtime-only optional dep — resolved at runtime from consumer's node_modules
+      const { Pool } = await import('pg');
+      // @ts-expect-error runtime-only optional dep
+      const { drizzle } = await import('drizzle-orm/node-postgres');
+      const { createPgRefreshSessionStore } = await import('@opensellvy/db-pg');
+      const { schema } = await import('@opensellvy/db');
+      const pool = new Pool({ connectionString: url });
+      return createPgRefreshSessionStore(drizzle(pool, { schema }) as never);
+    } catch (err) {
+      throw new OpenSellvyError(
+        'AUTH_SESSION_STORE_UNAVAILABLE',
+        'Gagal build Postgres session store — pastikan @opensellvy/db-pg, pg, dan drizzle-orm terpasang.',
+        { error: (err as Error).message },
+      );
+    }
   }
 
   private defaultRepositoryProvider(): RepositoryProvider | undefined {

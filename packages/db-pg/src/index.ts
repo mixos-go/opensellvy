@@ -1,4 +1,5 @@
-import { and, arrayContains, count, desc, eq, gte, ilike, inArray, or, lte } from 'drizzle-orm';
+import { and, arrayContains, count, desc, eq, gte, ilike, inArray, or, lte, sql } from 'drizzle-orm';
+import { randomHex } from '@opensellvy/core';
 import type {
   UnifiedOrder,
 
@@ -29,12 +30,20 @@ import type {
   RefreshSession,
   RefreshSessionStore,
   RoleCode,
+  OtpCode,
+  OtpStore,
+  IdentityStore,
+  ProviderName,
+  ProviderProfile,
+  CreateUserInput,
 } from '@opensellvy/core';
 import {
   stores,
   users,
   storeMembers,
   refreshTokens,
+  otpCodes,
+  userSocialLogins,
   channels,
   orders,
   products,
@@ -888,7 +897,13 @@ export function createPgRefreshSessionStore(db: DB): RefreshSessionStore {
 export function createPgAuthDeps(
   db: DB,
   jwtSecret: string,
-  opts?: { issuer?: string; audience?: string; accessTokenTtlSeconds?: number; refreshTokenTtlSeconds?: number },
+  opts?: {
+    issuer?: string;
+    audience?: string;
+    accessTokenTtlSeconds?: number;
+    refreshTokenTtlSeconds?: number;
+    requireEmailVerification?: boolean;
+  },
 ): AuthDeps {
   return {
     ...opts,
@@ -903,6 +918,100 @@ export function createPgAuthDeps(
       return row.role as RoleCode;
     },
     sessions: createPgRefreshSessionStore(db),
+    otps: createPgOtpStore(db),
+    identities: createPgIdentityStore(db),
+    createUser: async (input: CreateUserInput) => {
+      const rows = await db.insert(users).values({
+        id: input.id,
+        email: input.email,
+        name: input.name ?? input.email.split('@')[0] ?? input.email,
+        passwordHash: '',
+        status: 'active',
+        ...(input.emailVerifiedAt !== undefined ? { emailVerifiedAt: new Date(input.emailVerifiedAt) } : {}),
+      }).returning();
+      const row = rows[0];
+      if (!row) throw new Error('createUser gagal');
+      return mapAuthUserRow(row);
+    },
+    markEmailVerified: async (email) => {
+      await db.update(users).set({ emailVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(users.email, email));
+    },
+    setTwoFactor: async (userId, enabled) => {
+      await db.update(users).set({ twoFactorEnabled: enabled, updatedAt: new Date() }).where(eq(users.id, userId));
+    },
+  };
+}
+
+/** OTP store di Postgres — key (email, purpose), hanya hash kode disimpan. */
+export function createPgOtpStore(db: DB): OtpStore {
+  return {
+    async save(code: OtpCode) {
+      await db.insert(otpCodes).values({
+        email: code.email,
+        purpose: code.purpose,
+        codeHash: code.codeHash,
+        expiresAt: new Date(code.expiresAt),
+        attempts: code.attempts,
+        requestCount: code.requestCount,
+        createdAt: new Date(code.createdAt),
+        ...(code.consumedAt !== undefined ? { consumedAt: new Date(code.consumedAt) } : {}),
+      }).onConflictDoUpdate({
+        target: [otpCodes.email, otpCodes.purpose],
+        set: {
+          codeHash: code.codeHash,
+          expiresAt: new Date(code.expiresAt),
+          attempts: code.attempts,
+          requestCount: code.requestCount,
+          createdAt: new Date(code.createdAt),
+          ...(code.consumedAt !== undefined ? { consumedAt: new Date(code.consumedAt) } : {}),
+        },
+      });
+    },
+    async findByKey(email, purpose) {
+      const rows = await db.select().from(otpCodes)
+        .where(and(eq(otpCodes.email, email), eq(otpCodes.purpose, purpose)))
+        .limit(1);
+      const row = rows[0];
+      if (!row) return undefined;
+      return mapOtpCode(row);
+    },
+    async incrementAttempts(email, purpose) {
+      const rows = await db.update(otpCodes)
+        .set({ attempts: sql`${otpCodes.attempts} + 1` })
+        .where(and(eq(otpCodes.email, email), eq(otpCodes.purpose, purpose)))
+        .returning({ attempts: otpCodes.attempts });
+      return rows[0]?.attempts ?? 0;
+    },
+    async consume(email, purpose) {
+      await db.update(otpCodes)
+        .set({ consumedAt: new Date() })
+        .where(and(eq(otpCodes.email, email), eq(otpCodes.purpose, purpose)));
+    },
+  };
+}
+
+/** Identity store di Postgres — lookup provider → user + link. */
+export function createPgIdentityStore(db: DB): IdentityStore {
+  return {
+    async findUserByProvider(provider: ProviderName, providerUserId: string) {
+      const links = await db.select().from(userSocialLogins)
+        .where(and(eq(userSocialLogins.provider, provider), eq(userSocialLogins.providerUserId, providerUserId)))
+        .limit(1);
+      const link = links[0];
+      if (!link) return undefined;
+      const rows = await db.select().from(users).where(eq(users.id, link.userId)).limit(1);
+      const user = rows[0];
+      return user ? mapAuthUserRow(user) : undefined;
+    },
+    async linkProvider(userId: string, profile: ProviderProfile) {
+      await db.insert(userSocialLogins).values({
+        id: randomHex(16),
+        userId,
+        provider: profile.provider,
+        providerUserId: profile.providerUserId,
+        providerEmail: profile.email,
+      }).onConflictDoNothing();
+    },
   };
 }
 
@@ -911,13 +1020,49 @@ function findAuthUserByEmail(db: DB): (email: string) => Promise<AuthUserRecord 
     const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const r = rows[0];
     if (!r) return undefined;
-    return {
-      id: r.id,
-      email: r.email,
-      name: r.name,
-      passwordHash: r.passwordHash,
-      status: r.status as 'active' | 'suspended',
-    };
+    return mapAuthUserRow(r);
+  };
+}
+
+function mapAuthUserRow(r: {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  status: string;
+  emailVerifiedAt: Date | null;
+  twoFactorEnabled: boolean;
+}): AuthUserRecord {
+  return {
+    id: r.id,
+    email: r.email,
+    name: r.name,
+    passwordHash: r.passwordHash,
+    status: r.status as 'active' | 'suspended',
+    ...(r.emailVerifiedAt !== null ? { emailVerifiedAt: r.emailVerifiedAt.toISOString() } : {}),
+    twoFactorEnabled: r.twoFactorEnabled,
+  };
+}
+
+function mapOtpCode(r: {
+  email: string;
+  purpose: string;
+  codeHash: string;
+  expiresAt: Date;
+  attempts: number;
+  requestCount: number;
+  createdAt: Date;
+  consumedAt: Date | null;
+}): OtpCode {
+  return {
+    email: r.email,
+    purpose: r.purpose as OtpCode['purpose'],
+    codeHash: r.codeHash,
+    expiresAt: r.expiresAt.toISOString(),
+    attempts: r.attempts,
+    requestCount: r.requestCount,
+    createdAt: r.createdAt.toISOString(),
+    ...(r.consumedAt !== null ? { consumedAt: r.consumedAt.toISOString() } : {}),
   };
 }
 

@@ -45,6 +45,8 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull().default(''),
   status: text('status').notNull().default('active'),
+  emailVerifiedAt: tz('email_verified_at'),
+  twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
   createdAt: tz('created_at').notNull().defaultNow(),
   updatedAt: tz('updated_at').notNull().defaultNow(),
 });
@@ -79,6 +81,38 @@ export const refreshTokens = pgTable('refresh_tokens', {
   revoked: boolean('revoked').notNull().default(false),
   createdAt: tz('created_at').notNull().defaultNow(),
 });
+
+/** OTP codes (login passwordless / verifikasi email / 2FA). Hanya hash kode disimpan. */
+export const otpCodes = pgTable(
+  'otp_codes',
+  {
+    email: text('email').notNull(),
+    purpose: text('purpose').notNull(),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: tz('expires_at').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    requestCount: integer('request_count').notNull().default(0),
+    createdAt: tz('created_at').notNull().defaultNow(),
+    consumedAt: tz('consumed_at'),
+  },
+  (t) => [primaryKey({ columns: [t.email, t.purpose] })],
+);
+
+/** Identitas login eksternal (Google, dll) ter-link ke user internal. */
+export const userSocialLogins = pgTable(
+  'user_social_logins',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    providerUserId: text('provider_user_id').notNull(),
+    providerEmail: text('provider_email').notNull().default(''),
+    createdAt: tz('created_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('uq_user_social_logins_provider_user').on(t.provider, t.providerUserId)],
+);
 
 export const platformAccounts = pgTable('platform_accounts', {
   id: text('id').primaryKey(),

@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './mail';
 export * from './config';
 export * from './http';
 export * from './crypto';

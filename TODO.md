@@ -16,6 +16,50 @@
 > Bagian ini adalah satu-satunya tempat state/status yang berubah-ubah. AGENTS.md & SKILLS.md
 > TIDAK menyimpan state — keduanya selalu menunjuk ke sini. Update blok paling atas + timestamp.
 
+### `[2026-09-07 #7]` Pos: OTP (passwordless/verifikasi/2FA) + verifikasi email + Google OIDC di core & apps/auth ⏳
+
+- **Keputusan:** email via **Mailgun HTTP API** (`fetch`, region eu → `api.eu.mailgun.net`) — BUKAN SMTP/port 25.
+  OTP untuk: passwordless login, verifikasi email, dan **2FA opsional setelah password**. Google login via
+  OIDC + PKCE, **auto-link** bila email cocok dengan akun password yang ada.
+- **`@opensellvy/core`** (dibangun & dist di-update):
+  - `src/mail/`: `Mailer`/`MailMessage`, `memoryMailer` (dev/test — simpan `.messages`), `mailgunMailer`
+    (HTTP API, `fetch` injectable). Diexport dari core index.
+  - `src/auth/auth.deps.ts`: `AuthUserRecord.emailVerifiedAt?/twoFactorEnabled?`; AuthDeps OPSIONAL baru:
+    `requireEmailVerification, now, otpCodeGenerator, otps (OtpStore), identities (IdentityStore), createUser,
+    markEmailVerified, setTwoFactor`. Type baru: `OtpPurpose`, `OtpCode`, `OtpVerifyInput` (union diskriminan),
+    `ProviderName/ProviderProfile/IdentityStore/CreateUserInput/TwoFactorChallenge/LoginResultOrChallenge`,
+    `RoleCode`/`UserContext` ke auth.types. AuthErrorCode baru: `EMAIL_NOT_VERIFIED, OTP_INVALID, OTP_EXPIRED,
+    OTP_MAX_ATTEMPTS, OTP_REQUEST_TOO_FREQUENT, OTP_NOT_ALLOWED, CHALLENGE_INVALID, PROVIDER_NOT_CONFIGURED`.
+  - `src/auth/auth.service.ts`: `generateOtp` (return kode asli), `verifyOtp`, `enable/disableTwoFactor`,
+    `loginWithProvider` (google: find provider → find email → link/create); `login` → `LoginResultOrChallenge`;
+    semaphore 2FA = challenge token JWT `typ:'challenge'` (5 mnt). Gate `EMAIL_NOT_VERIFIED` hanya aktif bila
+    `requireEmailVerification` di-set (backward-compat). OTP: TTL 10 mnt, window 5 mnt, max 3 request, max 5
+    attempt lalu consume/lock; hanya hash sha256 kode disimpan (timing-safe compare).
+- **`@opensellvy/db`**: `users` + `email_verified_at` + `two_factor_enabled`; tabel `otp_codes` (PK email+purpose),
+  `user_social_logins` (unique provider+provider_user_id). Migrasi `00008_auth_otp_identity.sql`.
+- **`@opensellvy/db-pg`**: `createPgOtpStore`, `createPgIdentityStore`, `createPgAuthDeps` di-extend (otps,
+  identities, createUser, markEmailVerified, setTwoFactor) + `mapOtpCode`/`mapAuthUserRow` — **sudah dibuild &
+  typecheck/lint hijau**, battle test Postgres nyata JALAN dengan migrasi s/d 00008 (test 15 ✓).
+- **`apps/auth`** (port 4100):
+  - `src/index.ts`: `AuthAppConfig` + `mailer?`/`google?`/`requireEmailVerification?`; `memoryAuthDeps` kini
+    users Map mutable + `memoryOtpStore`/`memoryIdentityStore` (seeding lazy dev user, emailVerifiedAt di-set);
+    route baru `POST /auth/otp/request` (kirim via mailer), `POST /auth/otp/verify`, `POST /auth/two-factor/
+    {enable,disable}` (bearer), `GET /auth/google/{authorize,callback}` (hanya bila google config ada);
+    `toAuthError` → 401/400/403/429.
+  - `src/google.ts`: OIDC + PKCE — state JWT HS256 (berisi verifier), `code_challenge=S256`, verifikasi
+    id_token lewat endpoint tokeninfo Google (server-to-server, tanpa lib JWKS), `fetch` injectable.
+  - `src/email.ts`: `renderOtpEmail` (subjek beda per purpose). `src/run.ts`: env `MAILGUN_*`, `GOOGLE_*`,
+    `AUTH_REQUIRE_EMAIL_VERIFICATION`.
+  - Test 9 ✓ (login/refresh/logout, OTP passwordless end-to-end via mailer, kode salah → 400, OTP akun
+    berpassword → 403, Google authorize URL + callback + auto-link, callback tanpa code → 400, token exchange
+    gagal → 403, 2FA enable→challenge→2fa OTP→token→disable).
+- **`pnpm check` HIJAU: test 262** (sebelumnya 244; core +7, apps/auth +7).
+- **Catatan:** memoryAuthDeps `createUser` via route Google — passwordless user. Alur signup-berpassword
+  (registrasi) BELUM ada di apps/auth (nanti apps/web). `requireEmailVerification` bila true: akun Google
+  (email_verified) aman, akun password tanpa email_verified → login 403 EMAIL_NOT_VERIFIED.
+- **Belum:** verifikasi live Mailgun/Google butuh kredensial nyata via env. 2FA utk login Google di route
+  callback (loginWithProvider bisa kembalikan challenge bila 2FA on — sudah di-handle). `apps/web` (frontend).
+
 ### `[2026-09-07 #6]` Pos: mana mana apps/auth (SSO) & apps/server (backend OMS) — "pembuatan penuh disini dulu" ✅
 
 - **Keputusan:** iterasi full app DI MONOREPO dulu (`apps/*`); pisah ke SaaS terpisah setelah stabil (SDK

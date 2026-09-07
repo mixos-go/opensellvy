@@ -160,10 +160,15 @@ platform adapters `↔ registry (connector)` via register (bukan di-import balik
   stabil. SDK `@opensellvy/*` sdh siap publish (`"type":"module"` + `moduleResolution: bundler`). Arah depend
   paket tetap dijaga: apps BOLEH import `@opensellvy/platform-*` langsung (bukan module/sdk/api).
 - **`apps/auth`** (`@opensellvy/app-auth`, port 4100) — **SSO/RBAC service terpisah, satu pintu**:
-  `createAuthApp(config)` → Hono di `src/index.ts` (murni library, routes `/health` + `/auth/{login,refresh,logout,me}`);
-  bootstrap di `src/run.ts` (entry CLI `dev`/`start`). Auth via `createAuthService(createPgAuthDeps(db, jwtSecret))`
-  bila `databaseUrl`, fallback memory (user dev `dev@opensellvy.test`/`admin123`). Export `memoryRefreshSessionStore`,
-  `memoryAuthDeps`, `createAuthApp`, `createDatabase` (`apps/auth/src/db.ts`).
+  `createAuthApp(config)` → Hono di `src/index.ts` (murni library, routes `/health` +
+  `/auth/{login,refresh,logout,me,otp/request,otp/verify,two-factor/*,google/*}`); bootstrap di `src/run.ts`
+  (entry CLI `dev`/`start`). Auth via `createAuthService(createPgAuthDeps(db, jwtSecret))` bila `databaseUrl`,
+  fallback memory (user dev `dev@opensellvy.test`/`admin123`). **OTP + email + Google (2026-09-07):** Mailgun
+  HTTP API (`mailgunMailer`), OTP `login`/`verify_email`/`2fa` (hanya hash kode tersimpan, TTL 10 mnt, rate
+  limit 3/5mnt, max 5 attempt), Google OIDC + PKCE (`src/google.ts`, id_token verif lewat tokeninfo, auto-link
+  by email), `requireEmailVerification` gate. Export `memoryRefreshSessionStore`, `memoryAuthDeps`, `memoryOtpStore`,
+  `memoryIdentityStore`, `createAuthApp`, `createDatabase`, re-export `memoryMailer`/`Mailer`/`MailMessage`
+  (`apps/auth/src/db.ts`).
 - **`apps/server`** (`@opensellvy/app-server`, port 4200) — backend server OMS: `buildServerApp(config)` di
   `src/index.ts` → `createServer` (`@opensellvy/api`) dgn `sdk.open()` + `authService` dari `createPgAuthDeps`
   (JWT interoperable dgn apps/auth — SSO satu pintu via shared `jwtSecret` + DB sama). `registerLocal()` dipanggil.
